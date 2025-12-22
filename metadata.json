@@ -1,0 +1,5 @@
+{
+  "name": "EVM Privacy Wallet - ZK Shield",
+  "description": "A sophisticated privacy-centric EVM wallet UI demonstrating the psychological and technical distinction between Public Assets and Private (Shielded) Assets using ZK-SNARK concepts.",
+  "requestFramePermissions": []
+}

@@ -24,9 +24,16 @@ export interface Transaction {
   nullifier?: string; // Only for private txs
 }
 
+export interface PrivacyKeys {
+  spendingKey: string;
+  viewingKey: string;
+  publicAddress: string;
+  isInitialized: boolean;
+}
+
 export interface WalletState {
   publicBalance: string;
   privateBalance: string;
   address: string;
-  privateKeyAddress: string; // The "Privacy Key" address
+  privacyKeys: PrivacyKeys;
 }

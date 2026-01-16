@@ -1,7 +1,7 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { WalletState, Transaction, TransactionType } from '../types';
-import { Ghost, ShieldX, Sparkles } from 'lucide-react';
+import { Ghost, ShieldX, Sparkles, Key, Info, ExternalLink, Eye, EyeOff } from 'lucide-react';
 import HistoryItem from './HistoryItem';
 
 interface PrivateDashboardProps {
@@ -11,8 +11,11 @@ interface PrivateDashboardProps {
 }
 
 const PrivateDashboard: React.FC<PrivateDashboardProps> = ({ wallet, transactions, onAction }) => {
+  const [showKeys, setShowKeys] = useState(false);
+  const [viewingPrivacyKey, setViewingPrivacyKey] = useState(false);
+
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-12">
       <div className="text-center relative">
         <div className="absolute inset-0 blur-3xl opacity-20 bg-purple-500 -z-10 animate-pulse" />
         <h3 className="text-zinc-500 text-sm font-medium uppercase tracking-widest mb-1 flex items-center justify-center gap-2">
@@ -23,7 +26,7 @@ const PrivateDashboard: React.FC<PrivateDashboardProps> = ({ wallet, transaction
         </h1>
         <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 bg-zinc-900 rounded-full border border-zinc-800">
           <Sparkles size={12} className="text-yellow-400" />
-          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-tighter">Powered by ZK-SNARKs</span>
+          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-tighter">Deterministic ZK-Keys Active</span>
         </div>
       </div>
 
@@ -49,10 +52,70 @@ const PrivateDashboard: React.FC<PrivateDashboardProps> = ({ wallet, transaction
         </button>
       </div>
 
+      {/* Key Info / Backup Section */}
+      <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl overflow-hidden transition-all">
+        <button 
+          onClick={() => setShowKeys(!showKeys)}
+          className="w-full flex justify-between items-center p-4 hover:bg-zinc-800/50 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+             <Key size={18} className="text-purple-400" />
+             <span className="text-xs font-bold uppercase tracking-wider text-zinc-300">Privacy Key Info</span>
+          </div>
+          <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest bg-zinc-800 px-2 py-1 rounded">
+            {showKeys ? 'Hide' : 'Manage'}
+          </div>
+        </button>
+
+        {showKeys && (
+          <div className="p-4 pt-0 space-y-4 animate-in slide-in-from-top-2 duration-300">
+            <p className="text-[10px] text-zinc-500 leading-relaxed italic">
+              These keys are deterministically generated from your ETH signature. 
+              Anyone with access to your ETH wallet can regenerate these privacy keys.
+            </p>
+            
+            <div className="space-y-2">
+              <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800 flex justify-between items-center">
+                <div className="flex flex-col">
+                  <span className="text-[9px] font-black uppercase text-purple-500 tracking-tighter">Spending Key</span>
+                  <span className="text-xs mono text-zinc-400">
+                    {viewingPrivacyKey ? wallet.privacyKeys.spendingKey : '••••••••••••••••••••'}
+                  </span>
+                </div>
+                <button onClick={() => setViewingPrivacyKey(!viewingPrivacyKey)} className="text-zinc-600 hover:text-zinc-400 p-1">
+                  {viewingPrivacyKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              </div>
+
+              <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800 flex justify-between items-center">
+                <div className="flex flex-col">
+                  <span className="text-[9px] font-black uppercase text-pink-500 tracking-tighter">Viewing Key</span>
+                  <span className="text-xs mono text-zinc-400">
+                    {viewingPrivacyKey ? wallet.privacyKeys.viewingKey : '••••••••••••••••••••'}
+                  </span>
+                </div>
+                <button onClick={() => setViewingPrivacyKey(!viewingPrivacyKey)} className="text-zinc-600 hover:text-zinc-400 p-1">
+                  {viewingPrivacyKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+               <button className="flex-1 py-2 rounded-lg bg-zinc-800 text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-1.5 hover:bg-zinc-700 transition-colors">
+                 <Info size={12} /> Audit Tool
+               </button>
+               <button className="flex-1 py-2 rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/20 text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-1.5 hover:bg-purple-500/20 transition-colors">
+                 <ExternalLink size={12} /> View Schema
+               </button>
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="space-y-4">
         <div className="flex justify-between items-center">
           <h4 className="text-zinc-100 font-bold">Encrypted Ledger (Local)</h4>
-          <button className="text-purple-400 text-xs font-bold uppercase hover:underline">Audit</button>
+          <button className="text-purple-400 text-xs font-bold uppercase hover:underline">Clear Notes</button>
         </div>
         
         <div className="space-y-3">

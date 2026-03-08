@@ -9,9 +9,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@rainbow-me/rainbowkit": "^2.2.10",
+    "@tanstack/react-query": "^5.90.21",
+    "ethers": "^6.16.0",
+    "lucide-react": "^0.562.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
-    "lucide-react": "^0.562.0"
+    "viem": "^2.45.3",
+    "wagmi": "^2.19.5"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

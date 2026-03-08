@@ -1,6 +1,5 @@
-
-import React, { useState } from 'react';
-import { AssetType, Transaction, TransactionType, WalletState, PrivacyKeys } from './types';
+import React, { useState, useEffect } from 'react';
+import { AssetType, Transaction, TransactionType } from './types';
 import Header from './components/Header';
 import AssetToggle from './components/AssetToggle';
 import PublicDashboard from './components/PublicDashboard';
@@ -8,41 +7,33 @@ import PrivateDashboard from './components/PrivateDashboard';
 import ActionModal from './components/ActionModal';
 import SetupPrivacy from './components/SetupPrivacy';
 import { History, Send, Shield } from 'lucide-react';
-
-const INITIAL_STATE: WalletState = {
-  publicBalance: '1.245 ETH',
-  privateBalance: '3500.00 ATOS',
-  address: '0x71C7...f321',
-  privacyKeys: {
-    spendingKey: '',
-    viewingKey: '',
-    publicAddress: '',
-    isInitialized: false
-  }
-};
-
-const INITIAL_TXS: Transaction[] = [
-  {
-    id: '1',
-    type: TransactionType.TRANSFER,
-    amount: '0.1 ETH',
-    asset: 'ETH',
-    timestamp: Date.now() - 3600000,
-    from: '0x71C7...f321',
-    to: '0x8821...a1b2',
-    status: 'completed',
-    txHash: '0xab12...cdef'
-  }
-];
+import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { useAccount, useBalance } from 'wagmi';
+import { useWallet } from './hooks/useWallet';
 
 const App: React.FC = () => {
   const [activeAsset, setActiveAsset] = useState<AssetType>(AssetType.PUBLIC);
-  const [wallet, setWallet] = useState<WalletState>(INITIAL_STATE);
-  const [transactions, setTransactions] = useState<Transaction[]>(INITIAL_TXS);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [activeAction, setActiveAction] = useState<TransactionType | null>(null);
+  
+  const { address, isConnected } = useAccount();
+  const { data: balance } = useBalance({ address });
+  
+  const { 
+    wallet, 
+    initializePrivacy, 
+    shield, 
+    privateSend, 
+    unshield, 
+    transfer 
+  } = useWallet();
 
   const handleAction = (type: TransactionType) => {
+    if (!isConnected) {
+      alert('请先连接钱包！');
+      return;
+    }
     setActiveAction(type);
     setModalOpen(true);
   };
@@ -52,29 +43,64 @@ const App: React.FC = () => {
     setActiveAction(null);
   };
 
-  const handleInitializePrivacy = (keys: PrivacyKeys) => {
-    setWallet(prev => ({
-      ...prev,
-      privacyKeys: keys
-    }));
+  const handleInitializePrivacy = async () => {
+    try {
+      await initializePrivacy();
+      alert('隐私密钥初始化成功！');
+    } catch (error) {
+      console.error('初始化失败:', error);
+      alert('初始化失败，请重试');
+    }
   };
 
-  const onConfirmAction = (amount: string, to: string) => {
-    const newTx: Transaction = {
-      id: Math.random().toString(36).substr(2, 9),
-      type: activeAction!,
-      amount,
-      asset: activeAsset === AssetType.PUBLIC ? 'ETH' : 'ATOS',
-      timestamp: Date.now(),
-      from: activeAsset === AssetType.PUBLIC ? wallet.address : wallet.privacyKeys.publicAddress,
-      to,
-      status: 'completed',
-      txHash: activeAsset === AssetType.PUBLIC ? `0x${Math.random().toString(16).substr(2, 32)}` : undefined,
-      nullifier: activeAsset === AssetType.PRIVATE ? `nf_0x${Math.random().toString(16).substr(2, 16)}` : undefined
-    };
+  const onConfirmAction = async (amount: string, to: string) => {
+    try {
+      let tx: Transaction;
 
-    setTransactions([newTx, ...transactions]);
-    closeModal();
+      switch (activeAction) {
+        case TransactionType.TRANSFER:
+          tx = await transfer(amount, to);
+          break;
+        case TransactionType.SHIELD:
+          tx = await shield(amount);
+          break;
+        case TransactionType.UNSHIELD:
+          tx = await unshield(amount, to);
+          break;
+        case TransactionType.PRIVATE_SEND:
+          tx = await privateSend(amount, to);
+          break;
+        default:
+          throw new Error('未知操作类型');
+      }
+
+      setTransactions([tx, ...transactions]);
+      closeModal();
+      alert('交易成功！');
+    } catch (error) {
+      console.error('交易失败:', error);
+      alert(`交易失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    }
+  };
+
+  // 如果没有连接钱包，显示连接按钮
+  if (!isConnected) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-3xl font-bold mb-4">Atoshi Privacy Wallet</h1>
+          <p className="text-slate-600 mb-8">连接钱包开始使用隐私功能</p>
+          <ConnectButton />
+        </div>
+      </div>
+    );
+  }
+
+  // 构建 wallet 对象
+  const walletState = {
+    ...wallet,
+    address: address || '',
+    publicBalance: balance ? `${parseFloat(balance.formatted).toFixed(4)} ${balance.symbol}` : '0 ETH'
   };
 
   return (
@@ -83,7 +109,7 @@ const App: React.FC = () => {
         <div className={`absolute top-[-10%] left-[-20%] w-[300px] h-[300px] rounded-full blur-[100px] opacity-20 transition-all duration-700 ${activeAsset === AssetType.PUBLIC ? 'bg-blue-400' : 'bg-purple-600'}`} />
         <div className={`absolute bottom-[-10%] right-[-20%] w-[300px] h-[300px] rounded-full blur-[100px] opacity-20 transition-all duration-700 ${activeAsset === AssetType.PUBLIC ? 'bg-indigo-300' : 'bg-pink-600'}`} />
 
-        <Header wallet={wallet} activeAsset={activeAsset} />
+        <Header wallet={walletState} activeAsset={activeAsset} />
 
         <main className="flex-1 px-6 pt-4 pb-24 z-10">
           <AssetToggle activeAsset={activeAsset} setActiveAsset={setActiveAsset} />
@@ -91,16 +117,16 @@ const App: React.FC = () => {
           <div className="mt-8">
             {activeAsset === AssetType.PUBLIC ? (
               <PublicDashboard 
-                wallet={wallet} 
+                wallet={walletState} 
                 transactions={transactions.filter(t => [TransactionType.TRANSFER, TransactionType.SHIELD, TransactionType.UNSHIELD].includes(t.type))} 
                 onAction={handleAction}
               />
             ) : (
               !wallet.privacyKeys.isInitialized ? (
-                <SetupPrivacy wallet={wallet} onComplete={handleInitializePrivacy} />
+                <SetupPrivacy wallet={walletState} onInitialize={handleInitializePrivacy} />
               ) : (
                 <PrivateDashboard 
-                  wallet={wallet} 
+                  wallet={walletState} 
                   transactions={transactions.filter(t => [TransactionType.PRIVATE_SEND, TransactionType.SHIELD, TransactionType.UNSHIELD].includes(t.type))} 
                   onAction={handleAction}
                 />

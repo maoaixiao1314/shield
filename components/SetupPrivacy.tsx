@@ -5,32 +5,33 @@ import { Fingerprint, Loader2, Sparkles, Binary, Key, ChevronRight } from 'lucid
 
 interface SetupPrivacyProps {
   wallet: WalletState;
-  onComplete: (keys: PrivacyKeys) => void;
+  onInitialize: () => Promise<void>;
 }
 
-const SetupPrivacy: React.FC<SetupPrivacyProps> = ({ wallet, onComplete }) => {
+const SetupPrivacy: React.FC<SetupPrivacyProps> = ({ wallet, onInitialize }) => {
   const [step, setStep] = useState<'start' | 'signing' | 'deriving' | 'success'>('start');
   const [progress, setProgress] = useState(0);
 
   const startDerivation = async () => {
-    setStep('signing');
-    await new Promise(r => setTimeout(r, 1200)); // Simulate signing delay
-    
-    setStep('deriving');
-    for (let i = 0; i <= 100; i += 4) {
-      setProgress(i);
-      await new Promise(r => setTimeout(r, 50));
+    try {
+      setStep('signing');
+      
+      // 调用真正的 SDK 初始化
+      await onInitialize();
+      
+      setStep('deriving');
+      for (let i = 0; i <= 100; i += 10) {
+        setProgress(i);
+        await new Promise(r => setTimeout(r, 50));
+      }
+
+      setStep('success');
+    } catch (error) {
+      console.error('密钥派生失败:', error);
+      alert(`初始化失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      setStep('start');
+      setProgress(0);
     }
-
-    const derivedKeys: PrivacyKeys = {
-      spendingKey: 'sk_atos_' + Math.random().toString(16).slice(2, 24),
-      viewingKey: 'vk_atos_' + Math.random().toString(16).slice(2, 24),
-      publicAddress: 'zk_atos_' + wallet.address.slice(2, 10) + '...' + Math.random().toString(36).slice(2, 6),
-      isInitialized: true
-    };
-
-    setStep('success');
-    setTimeout(() => onComplete(derivedKeys), 1500);
   };
 
   return (

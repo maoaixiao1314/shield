@@ -37,3 +37,13 @@ export interface WalletState {
   address: string;
   privacyKeys: PrivacyKeys;
 }
+
+// Note 结构（隐私交易的核心）
+export interface Note {
+  amount: bigint;
+  secret: string;
+  nullifier: string;
+  recipient: string;
+  spent: boolean;
+  leafIndex: number;
+}

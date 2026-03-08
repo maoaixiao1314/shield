@@ -82,7 +82,7 @@ const ActionModal: React.FC<ActionModalProps> = ({ isOpen, onClose, type, active
 
           <div>
             <label className={`block text-[10px] font-black uppercase tracking-widest mb-1.5 ${isDark ? 'text-purple-400' : 'text-blue-600'}`}>
-              {type === TransactionType.PRIVATE_SEND ? 'Receiver Privacy Key' : 'Receiver Address'}
+              {type === TransactionType.PRIVATE_SEND ? 'Receiver Privacy Address' : 'Receiver Address'}
             </label>
             <div className={`relative rounded-2xl border transition-all ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-slate-50 border-slate-200'} focus-within:ring-2 ${isDark ? 'focus-within:ring-purple-500/30' : 'focus-within:ring-blue-500/20'}`}>
               <input 

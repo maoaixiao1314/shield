@@ -144,6 +144,10 @@ export function useWallet() {
       const commitment = computeCommitment(note);
 
       // 2. 调用 Shield 合约的 deposit 函数
+      //    新签名 (2026-05-28): deposit(uint256 commitment, address token, uint256 amount, bytes encryptedNote)
+      //    encryptedNote 暂传 "0x" (空), V1.5 接 @atoshi/privacy-sdk 的 ECIES 后填充给自己加密的 Note 数据.
+      //    token = NATIVE_TOKEN = address(0), amount 跟 value 必须相等.
+      const NATIVE_TOKEN = '0x0000000000000000000000000000000000000000' as const;
       const hash = await writeContractAsync({
         chain: atoshiL2,
         account: walletClient.account.address as `0x${string}`,
@@ -153,15 +157,25 @@ export function useWallet() {
             name: 'deposit',
             type: 'function',
             stateMutability: 'payable',
-            inputs: [{ name: 'commitment', type: 'bytes32' }],
+            inputs: [
+              { name: 'commitment', type: 'uint256' },
+              { name: 'token', type: 'address' },
+              { name: 'amount', type: 'uint256' },
+              { name: 'encryptedNote', type: 'bytes' }
+            ],
             outputs: []
           }
         ] as const,
         functionName: 'deposit',
-        args: [commitment as `0x${string}`],
-        value: parseEther(amount),
-        gas: 500000n,
-        gasPrice: 1000000000000n // 1000 Gwei (提高 10 倍)
+        args: [
+          BigInt(commitment), // bytes32 hex → uint256 (新合约要 uint256)
+          NATIVE_TOKEN,
+          amountWei,
+          '0x' as `0x${string}`, // encryptedNote: 空,V1.5 加 ECIES
+        ],
+        value: amountWei,
+        gas: 1_500_000n, // 20 层 Poseidon + Merkle insert 约 800K, 留 buffer
+        gasPrice: 2_000_000_000n, // 2 gwei (fork11 合理值)
       });
 
       // 3. 保存 Note 到本地

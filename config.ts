@@ -12,7 +12,7 @@ export const config = {
 
   // 合约地址
   contracts: {
-    shield: import.meta.env.VITE_SHIELD_CONTRACT || '0x5823E049cF25e2AD00aE8182DDf501e0B5fe387F',
+    shield: import.meta.env.VITE_SHIELD_CONTRACT || '0x2942ACf67055b1520904227d13789cc03C8CBa8C',
     verifier: import.meta.env.VITE_VERIFIER_CONTRACT || '0x411a113d3E8Ba7cDc38e103A95BFb7193135De64',
     tokenRegistry: import.meta.env.VITE_TOKEN_REGISTRY_CONTRACT || '0xbC8360dAB1830f9E63a5d0F94d4145eb61C9Ea79'
   },

@@ -108,6 +108,25 @@ const PrivateDashboard: React.FC<PrivateDashboardProps> = ({ wallet, transaction
                  <ExternalLink size={12} /> View Schema
                </button>
             </div>
+
+            {/* 我的隐私收款码 — 别人 transfer 给我用 */}
+            {(wallet.privacyKeys as any).receivingCode && (
+              <div className="mt-3 bg-zinc-950 p-3 rounded-xl border border-zinc-800">
+                <span className="text-[9px] font-black uppercase text-emerald-500 tracking-tighter">我的隐私收款码 (给别人转账给我)</span>
+                <div className="mt-2 break-all text-[10px] font-mono text-zinc-400 bg-zinc-900 p-2 rounded">
+                  {(wallet.privacyKeys as any).receivingCode}
+                </div>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText((wallet.privacyKeys as any).receivingCode);
+                    alert('收款码已复制! 把这串字符发给对方,对方 "Private Send" 时粘贴即可');
+                  }}
+                  className="mt-2 w-full py-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-500/20 transition-colors"
+                >
+                  📋 复制收款码
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

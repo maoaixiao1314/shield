@@ -13,14 +13,20 @@ import {
   randomBlinding,
   encryptNote,
   viewingPubKey,
-  bytesToHex,
-  scanForMyNotes,
+  ChainScanner,
   RecoveredNote,
-} from '../sdk/atoshi-crypto';
+} from '@atoshi/privacy-sdk';
 import {
   prepareAndProveUnshield,
   prepareAndProveTransfer,
 } from '../sdk/zk-prover';
+
+// 本地辅助:Uint8Array → 0x hex (SDK 不导出这个,自己写一行)
+const bytesToHex = (b: Uint8Array): string => {
+  let s = '0x';
+  for (const x of b) s += x.toString(16).padStart(2, '0');
+  return s;
+};
 import { WalletState, Transaction, TransactionType, PrivacyKeys } from '../types';
 import config from '../config';
 import { atoshiL2 } from '../wagmi.config';
@@ -113,18 +119,29 @@ export function useWallet() {
       );
       
       const keys = await sdk.deriveKeys(wagmiSigner as any);
-      
+
+      // 生成"我的隐私收款码" (给别人 transfer 给我用):
+      //   { ownerPubkey: Poseidon(spendingKey), viewingPubKey: X25519(viewingKey) }
+      // 这两个都是公开值, 分享给 Alice 后她能加密 newNote 给我.
+      try {
+        const sk = BigInt(keys.spendingKey);
+        const vk = BigInt(keys.viewingKey);
+        const ownerPubkey = await deriveOwnerPubkey(sk);
+        const viewPub = viewingPubKey(vk);
+        (keys as any).receivingCode = JSON.stringify({
+          ownerPubkey: ownerPubkey.toString(),
+          viewingPubKey: bytesToHex(viewPub),
+        });
+        console.log('[receivingCode]', (keys as any).receivingCode);
+      } catch (e) {
+        console.warn('生成 receivingCode 失败:', e);
+      }
+
       // 保存到本地
       localStorage.setItem('privacy_keys', JSON.stringify(keys));
-      
-      // 设置到 wallet state
       setWallet(prev => ({ ...prev, privacyKeys: keys }));
-      
-      // SDK 内部已经设置了，但为了确保一致性，再次设置
       sdk.setPrivacyKeys(keys);
-      
       console.log('隐私密钥初始化完成并已同步到 SDK');
-      
       return keys;
     } catch (error) {
       console.error('初始化隐私密钥失败:', error);
@@ -241,17 +258,19 @@ export function useWallet() {
       throw new Error('请先连接钱包并签名以派生隐私身份');
     }
     const viewingKey = BigInt(wallet.privacyKeys.viewingKey);
+    const spendingKey = BigInt(wallet.privacyKeys.spendingKey);
+    const lastScanned = parseInt(localStorage.getItem('last_scanned_block') || '0', 10);
+    const scanner = new ChainScanner({
+      rpcUrl: config.l2.rpcUrl,
+      shieldAddress: config.contracts.shield,
+      fromBlock: lastScanned,
+      chunkSize: 9000,
+    });
+    const recovered = await scanner.scanForViewer(viewingKey, spendingKey);
     const provider = new ethers.JsonRpcProvider(
       config.l2.rpcUrl,
       { chainId: config.l2.chainId, name: 'atoshi-l2' },
       { batchMaxCount: 1, staticNetwork: true }
-    );
-    const lastScanned = parseInt(localStorage.getItem('last_scanned_block') || '0', 10);
-    const recovered = await scanForMyNotes(
-      provider,
-      config.contracts.shield,
-      viewingKey,
-      lastScanned
     );
     // 合并到 localStorage (按 commitment 去重)
     const existing = loadNotes();
@@ -313,26 +332,50 @@ export function useWallet() {
   };
 
   // Transfer (隐私 → 隐私) — 真实 ZK proof + Shield.transfer
-  // `to` 参数是 **Bob 的 ownerPubkey** (Bob 从他的隐私身份导出, 16 进制 string 或 decimal)
-  //  生产场景 Bob 会先把 ownerPubkey 给 Alice (扫码/IM), Alice 用它构造新 Note.
+  //
+  // `to` 参数是 Bob 的"隐私收款码", 是一个 JSON 字符串(或 base64 编码), 包含:
+  //   { ownerPubkey: "...", viewingPubKey: "0x..." }
+  //
+  // Bob 在自己设置 Setup Privacy 后, 钱包应展示一个二维码 / 复制按钮
+  // 让 Bob 把这两个公开值分享给 Alice. Alice 扫码/粘贴后调本函数.
+  //
+  // 安全: ownerPubkey 和 viewingPubKey 都是公开值, 分享不会泄漏 Bob 的资金.
   const privateSend = async (amount: string, to: string): Promise<Transaction> => {
     if (!walletClient) throw new Error('请先连接钱包');
     if (!wallet.privacyKeys?.isInitialized) throw new Error('请先初始化隐私身份');
 
     const amountWei = ethers.parseEther(amount);
     const spendingKey = BigInt(wallet.privacyKeys.spendingKey);
-    const viewingKey = BigInt(wallet.privacyKeys.viewingKey);
 
-    // 1. 解析 Bob 的 ownerPubkey (输入可以是 0x... 或十进制)
+    // 1. 解析 Bob 的收款码
     let bobOwnerPubkey: bigint;
+    let bobViewingPubKey: Uint8Array;
     try {
-      bobOwnerPubkey = to.startsWith('0x') ? BigInt(to) : BigInt(to);
-    } catch {
-      throw new Error(`无效的接收方 ownerPubkey: ${to}. 应是 BN254 域内的 BigInt`);
+      const trimmed = to.trim();
+      // 支持两种格式:
+      //   A) JSON: {"ownerPubkey":"...","viewingPubKey":"0x..."}
+      //   B) 简化纯 ownerPubkey (Bob 还没分享 viewingPubKey, fallback 加密给自己)
+      if (trimmed.startsWith('{')) {
+        const parsed = JSON.parse(trimmed);
+        if (!parsed.ownerPubkey || !parsed.viewingPubKey) {
+          throw new Error('收款码缺字段');
+        }
+        bobOwnerPubkey = BigInt(parsed.ownerPubkey);
+        const hex = parsed.viewingPubKey.startsWith('0x') ? parsed.viewingPubKey.slice(2) : parsed.viewingPubKey;
+        bobViewingPubKey = new Uint8Array(hex.length / 2);
+        for (let i = 0; i < bobViewingPubKey.length; i++) {
+          bobViewingPubKey[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+        }
+        if (bobViewingPubKey.length !== 32) throw new Error('viewingPubKey 必须 32 字节');
+      } else {
+        // Fallback: 旧格式只有 ownerPubkey, 加密给自己(用户兜底, Bob 需要带外传 Note)
+        bobOwnerPubkey = BigInt(trimmed);
+        bobViewingPubKey = viewingPubKey(BigInt(wallet.privacyKeys.viewingKey));
+        console.warn('[transfer] 收款码不带 viewingPubKey,加密给自己(Bob 收不到 Note 通知)');
+      }
+    } catch (e: any) {
+      throw new Error(`无效的收款码: ${e?.message || e}`);
     }
-    // 提示: V1.5 应该让 Bob 也分享 viewingPubKey, Alice 用它加密 newNote 给 Bob.
-    // 当前 demo 简化: Alice 给自己 viewingPubKey 加密(自己也能恢复, Bob 需要带外传 Note).
-    // TODO V1.5: 增加输入 Bob 的 viewingPubKey
 
     // 2. 选一笔金额相等的本地 Note
     const allNotes = loadNotes().filter((n: any) => !n.spent && BigInt(n.amount) === amountWei);
@@ -345,10 +388,11 @@ export function useWallet() {
     const tokenId = 0n;
     const newCommitment = await atoshiComputeCommitment(amountWei, tokenId, bobOwnerPubkey, newBlinding);
 
-    // 加密 newNote 给自己 (兜底:Alice 自己能扫回; Bob 需 Alice 带外传完整 Note)
+    // 加密 newNote 给 Bob (用 Bob 的 viewingPubKey 加密, Bob 扫链能解开)
+    // 如果用户没提供 Bob 的 viewingPubKey, 会 fallback 用 Alice 自己的(在上面解析时已设)
     const encryptedNote = await encryptNote(
       { amount: amountWei.toString(), tokenId: '0', blinding: newBlinding.toString() },
-      viewingPubKey(viewingKey)
+      bobViewingPubKey
     );
 
     // 4. 准备 provider + 生成 ZK proof

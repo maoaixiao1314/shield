@@ -14,7 +14,7 @@ import {
   rebuildMerkleTree,
   computeNullifier,
   MerkleTreeData,
-} from './atoshi-crypto';
+} from '@atoshi/privacy-sdk';
 
 const UNSHIELD_WASM = '/circuits/unshield.wasm';
 const UNSHIELD_ZKEY = '/circuits/unshield_final.zkey';

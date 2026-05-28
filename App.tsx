@@ -20,14 +20,34 @@ const App: React.FC = () => {
   const { address, isConnected } = useAccount();
   const { data: balance } = useBalance({ address });
   
-  const { 
-    wallet, 
-    initializePrivacy, 
-    shield, 
-    privateSend, 
-    unshield, 
-    transfer 
+  const {
+    wallet,
+    initializePrivacy,
+    shield,
+    privateSend,
+    unshield,
+    transfer,
+    recoverNotesFromChain,
   } = useWallet();
+
+  const [isRecovering, setIsRecovering] = useState(false);
+
+  const handleRecoverNotes = async () => {
+    if (!wallet.privacyKeys?.isInitialized) {
+      alert('请先连接钱包并初始化隐私身份');
+      return;
+    }
+    setIsRecovering(true);
+    try {
+      const recovered = await recoverNotesFromChain();
+      alert(`扫描完成,恢复了 ${recovered.length} 笔 Note`);
+    } catch (e: any) {
+      console.error('恢复失败:', e);
+      alert('恢复失败: ' + (e?.message || e));
+    } finally {
+      setIsRecovering(false);
+    }
+  };
 
   const handleAction = (type: TransactionType) => {
     if (!isConnected) {
@@ -125,11 +145,23 @@ const App: React.FC = () => {
               !wallet.privacyKeys.isInitialized ? (
                 <SetupPrivacy wallet={walletState} onInitialize={handleInitializePrivacy} />
               ) : (
-                <PrivateDashboard 
-                  wallet={walletState} 
-                  transactions={transactions.filter(t => [TransactionType.PRIVATE_SEND, TransactionType.SHIELD, TransactionType.UNSHIELD].includes(t.type))} 
-                  onAction={handleAction}
-                />
+                <>
+                  {/* 跨设备恢复入口: 从链上扫所有 Deposit 事件,用 viewingKey 解密属于本人的 Note */}
+                  <div className="mb-4 flex justify-center">
+                    <button
+                      onClick={handleRecoverNotes}
+                      disabled={isRecovering}
+                      className="px-4 py-2 text-xs font-bold uppercase tracking-widest rounded-full bg-zinc-900 border border-zinc-700 text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
+                    >
+                      {isRecovering ? '⏳ 扫描链上 Note...' : '🔄 从链上恢复 Note'}
+                    </button>
+                  </div>
+                  <PrivateDashboard
+                    wallet={walletState}
+                    transactions={transactions.filter(t => [TransactionType.PRIVATE_SEND, TransactionType.SHIELD, TransactionType.UNSHIELD].includes(t.type))}
+                    onAction={handleAction}
+                  />
+                </>
               )
             )}
           </div>

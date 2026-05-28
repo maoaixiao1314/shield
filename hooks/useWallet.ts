@@ -7,6 +7,18 @@ import { ethers } from 'ethers';
 import { useWalletClient, useSignTypedData, useSendTransaction, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { parseEther } from 'viem';
 import { getPrivacySDK } from '../sdk/privacy-sdk';
+import {
+  computeCommitment as atoshiComputeCommitment,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  computeNullifier,         // 留给 Unshield (W2) 用
+  deriveOwnerPubkey,
+  randomBlinding,
+  encryptNote,
+  viewingPubKey,
+  bytesToHex,
+  scanForMyNotes,
+  RecoveredNote,
+} from '../sdk/atoshi-crypto';
 import { WalletState, Transaction, TransactionType, PrivacyKeys } from '../types';
 import config from '../config';
 import { atoshiL2 } from '../wagmi.config';
@@ -138,15 +150,30 @@ export function useWallet() {
     }
 
     try {
-      // 1. 生成 Note 和 Commitment
-      const amountWei = ethers.parseEther(amount);
-      const note = generateNote(amountWei, wallet.privacyKeys.publicAddress);
-      const commitment = computeCommitment(note);
+      // 1. 用真实 Poseidon + ECIES 构造 Note + 加密
+      //    需要 spendingKey / viewingKey: 从 wallet.privacyKeys 里恢复
+      const spendingKey = BigInt(wallet.privacyKeys.spendingKey);
+      const viewingKey = BigInt(wallet.privacyKeys.viewingKey);
 
-      // 2. 调用 Shield 合约的 deposit 函数
-      //    新签名 (2026-05-28): deposit(uint256 commitment, address token, uint256 amount, bytes encryptedNote)
-      //    encryptedNote 暂传 "0x" (空), V1.5 接 @atoshi/privacy-sdk 的 ECIES 后填充给自己加密的 Note 数据.
-      //    token = NATIVE_TOKEN = address(0), amount 跟 value 必须相等.
+      const amountWei = ethers.parseEther(amount);
+      const tokenId = 0n; // NATIVE_TOKEN
+      const blinding = randomBlinding();
+
+      // commitment = Poseidon(amount, tokenId, ownerPubkey, blinding)
+      const ownerPubkey = await deriveOwnerPubkey(spendingKey);
+      const commitment = await atoshiComputeCommitment(amountWei, tokenId, ownerPubkey, blinding);
+
+      // 加密 Note 给自己 (跨设备恢复时用 viewingKey 扫回来)
+      const encryptedNote = await encryptNote(
+        {
+          amount: amountWei.toString(),
+          tokenId: tokenId.toString(),
+          blinding: blinding.toString(),
+        },
+        viewingPubKey(viewingKey)
+      );
+
+      // 2. 调 Shield.deposit
       const NATIVE_TOKEN = '0x0000000000000000000000000000000000000000' as const;
       const hash = await writeContractAsync({
         chain: atoshiL2,
@@ -168,18 +195,26 @@ export function useWallet() {
         ] as const,
         functionName: 'deposit',
         args: [
-          BigInt(commitment), // bytes32 hex → uint256 (新合约要 uint256)
+          commitment,
           NATIVE_TOKEN,
           amountWei,
-          '0x' as `0x${string}`, // encryptedNote: 空,V1.5 加 ECIES
+          bytesToHex(encryptedNote) as `0x${string}`,
         ],
         value: amountWei,
-        gas: 1_500_000n, // 20 层 Poseidon + Merkle insert 约 800K, 留 buffer
-        gasPrice: 2_000_000_000n, // 2 gwei (fork11 合理值)
+        gas: 1_500_000n,
+        gasPrice: 2_000_000_000n,
       });
 
-      // 3. 保存 Note 到本地
-      saveNote(note);
+      // 3. 保存 Note 到本地 (完整字段, 跟 ChainScanner 恢复的格式一致)
+      saveNote({
+        amount: amountWei,
+        secret: blinding.toString(),  // 沿用旧字段名兼容 UI, 实际存的是 blinding
+        nullifier: '',                // 花费时才算
+        recipient: wallet.privacyKeys.publicAddress,
+        spent: false,
+        leafIndex: -1,                // tx 确认后从事件里读
+        commitment: commitment.toString(),
+      });
 
       return {
         id: hash,
@@ -198,28 +233,48 @@ export function useWallet() {
     }
   };
 
-  // 辅助函数：生成 Note
-  const generateNote = (amount: bigint, recipient: string) => {
-    const secret = ethers.hexlify(ethers.randomBytes(32));
-    const nullifier = ethers.hexlify(ethers.randomBytes(32));
-    
-    return {
-      amount: amount,
-      secret: secret,
-      nullifier: nullifier,
-      recipient: recipient,
-      spent: false,
-      leafIndex: -1
-    };
+  // 跨设备恢复: 从链上扫描 + 解密属于本人的 Note
+  const recoverNotesFromChain = async (): Promise<RecoveredNote[]> => {
+    if (!wallet.privacyKeys?.isInitialized) {
+      throw new Error('请先连接钱包并签名以派生隐私身份');
+    }
+    const viewingKey = BigInt(wallet.privacyKeys.viewingKey);
+    const provider = new ethers.JsonRpcProvider(
+      config.l2.rpcUrl,
+      { chainId: config.l2.chainId, name: 'atoshi-l2' },
+      { batchMaxCount: 1, staticNetwork: true }
+    );
+    const lastScanned = parseInt(localStorage.getItem('last_scanned_block') || '0', 10);
+    const recovered = await scanForMyNotes(
+      provider,
+      config.contracts.shield,
+      viewingKey,
+      lastScanned
+    );
+    // 合并到 localStorage (按 commitment 去重)
+    const existing = loadNotes();
+    const existingCommitments = new Set(existing.map((n: any) => n.commitment));
+    for (const note of recovered) {
+      if (existingCommitments.has(note.commitment.toString())) continue;
+      existing.push({
+        amount: note.amount.toString(),
+        secret: note.blinding.toString(),
+        nullifier: '',
+        recipient: wallet.privacyKeys.publicAddress,
+        spent: false,
+        leafIndex: note.leafIndex,
+        commitment: note.commitment.toString(),
+      });
+    }
+    localStorage.setItem('privacy_notes', JSON.stringify(existing));
+    localStorage.setItem('last_scanned_block', (await provider.getBlockNumber()).toString());
+    console.log(`[recovery] 恢复 ${recovered.length} 笔 Note`);
+    return recovered;
   };
 
-  // 辅助函数：计算 Commitment
-  const computeCommitment = (note: any): string => {
-    // 简化版 Poseidon Hash（实际应该使用 circomlibjs）
-    const amountStr = note.amount.toString();
-    const combined = amountStr + note.secret + note.nullifier + note.recipient;
-    return ethers.keccak256(ethers.toUtf8Bytes(combined));
-  };
+  // 旧的 generateNote / computeCommitment (用 keccak 占位) 已删除:
+  // - Note 构造用 sdk/atoshi-crypto.ts 的 randomBlinding + computeCommitment (真实 Poseidon)
+  // - 直接在 shield() 流程里 inline (line 142-160)
 
   // 辅助函数：保存 Note
   const saveNote = (note: any): void => {
@@ -358,6 +413,7 @@ export function useWallet() {
     privateSend,
     unshield,
     transfer,
-    updatePrivateBalance
+    updatePrivateBalance,
+    recoverNotesFromChain,    // 跨设备恢复:从链扫所有 Deposit, 用 viewingKey 解密属于本人的 Note
   };
 }

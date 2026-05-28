@@ -77,9 +77,11 @@ export async function deriveKeysFromSignature(
   const seed = ethers.getBytes(ethers.keccak256(sigBytes));
 
   // HKDF-SHA256 派生 3 个 key, info 字符串跟 SDK 严格一致
-  const spendingBytes = hkdf(sha256, seed, undefined, 'atoshi-privacy-v1:spending', 32);
-  const viewingBytes = hkdf(sha256, seed, undefined, 'atoshi-privacy-v1:viewing', 32);
-  const encryptionKey = hkdf(sha256, seed, undefined, 'atoshi-privacy-v1:encryption', 32);
+  // (@noble/hashes v2 要 Uint8Array 作 info, 需要 TextEncoder 编码)
+  const enc = new TextEncoder();
+  const spendingBytes = hkdf(sha256, seed, undefined, enc.encode('atoshi-privacy-v1:spending'), 32);
+  const viewingBytes = hkdf(sha256, seed, undefined, enc.encode('atoshi-privacy-v1:viewing'), 32);
+  const encryptionKey = hkdf(sha256, seed, undefined, enc.encode('atoshi-privacy-v1:encryption'), 32);
 
   // spending/viewing 取模到 BN254 域 (Poseidon 要求)
   const spendingKey = bytesToFieldElement(spendingBytes);
@@ -181,9 +183,12 @@ export async function eciesEncrypt(
   const aesKey = sha256(kdfInput);
 
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const key = await crypto.subtle.importKey('raw', aesKey, { name: 'AES-GCM' }, false, ['encrypt']);
+  // aesKey 用 .buffer.slice() 转出 ArrayBuffer (避免 TS 严格模式下 SharedArrayBuffer 抱怨)
+  const aesKeyAB = aesKey.buffer.slice(aesKey.byteOffset, aesKey.byteOffset + aesKey.byteLength) as ArrayBuffer;
+  const key = await crypto.subtle.importKey('raw', aesKeyAB, { name: 'AES-GCM' }, false, ['encrypt']);
+  const ptAB = plaintext.buffer.slice(plaintext.byteOffset, plaintext.byteOffset + plaintext.byteLength) as ArrayBuffer;
   const ctTag = new Uint8Array(
-    await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plaintext)
+    await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv as BufferSource }, key, ptAB)
   );
 
   const out = new Uint8Array(32 + 12 + ctTag.length);
@@ -212,8 +217,11 @@ export async function eciesDecrypt(
     kdfInput.set(ephPub, shared.length);
     const aesKey = sha256(kdfInput);
 
-    const key = await crypto.subtle.importKey('raw', aesKey, { name: 'AES-GCM' }, false, ['decrypt']);
-    return new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ctTag));
+    const aesKeyAB = aesKey.buffer.slice(aesKey.byteOffset, aesKey.byteOffset + aesKey.byteLength) as ArrayBuffer;
+    const key = await crypto.subtle.importKey('raw', aesKeyAB, { name: 'AES-GCM' }, false, ['decrypt']);
+    // ctTag 来自 subarray, 也需要复制成连续 ArrayBuffer
+    const ctAB = ctTag.buffer.slice(ctTag.byteOffset, ctTag.byteOffset + ctTag.byteLength) as ArrayBuffer;
+    return new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv as BufferSource }, key, ctAB));
   } catch {
     return null;
   }
@@ -288,6 +296,112 @@ export interface RecoveredNote {
 const DEPOSIT_IFACE = new ethers.Interface([
   'event Deposit(uint256 indexed commitment, uint256 leafIndex, uint256 timestamp, address indexed token, uint256 amount, bytes encryptedNote)',
 ]);
+
+// ============================================================================
+// 5. Merkle Tree 重建 (Unshield / Transfer 生成 proof 用)
+// ============================================================================
+
+export interface MerklePath {
+  pathElements: string[];
+  pathIndices: number[];
+  root: bigint;
+}
+
+export interface MerkleTreeData {
+  leaves: bigint[];
+  treeLevels: bigint[][];
+  root: bigint;
+  zeros: bigint[];
+  pathFor(leafIndex: number): MerklePath;
+}
+
+/** Tornado-style 空子树 hash 链 */
+async function buildZeros(levels: number): Promise<bigint[]> {
+  const zeros: bigint[] = [0n];
+  for (let i = 1; i < levels; i++) {
+    zeros.push(await poseidon([zeros[i - 1], zeros[i - 1]]));
+  }
+  return zeros;
+}
+
+/**
+ * 从 Shield 合约链上 Deposit 事件重建 Merkle tree.
+ * 返回的 tree 可以为任意 leafIndex 算 path (Unshield/Transfer proof 用).
+ */
+export async function rebuildMerkleTree(
+  provider: ethers.JsonRpcProvider,
+  shieldAddress: string,
+  levels = 20,
+  chunkSize = 9000
+): Promise<MerkleTreeData> {
+  const latest = await provider.getBlockNumber();
+  const entries: { leafIndex: number; commitment: bigint }[] = [];
+
+  for (let from = 0; from <= latest; from += chunkSize) {
+    const to = Math.min(from + chunkSize - 1, latest);
+    const logs = await provider.getLogs({
+      address: shieldAddress,
+      topics: [DEPOSIT_EVENT_SIG],
+      fromBlock: from,
+      toBlock: to,
+    });
+    for (const log of logs) {
+      try {
+        const parsed = DEPOSIT_IFACE.parseLog({ topics: log.topics as string[], data: log.data });
+        if (!parsed) continue;
+        entries.push({
+          leafIndex: Number(parsed.args.leafIndex),
+          commitment: BigInt(parsed.args.commitment),
+        });
+      } catch {}
+    }
+  }
+
+  entries.sort((a, b) => a.leafIndex - b.leafIndex);
+  const leaves = entries.map(e => e.commitment);
+
+  const zeros = await buildZeros(levels);
+
+  // 构建树, 每层 hash 相邻对
+  const treeLevels: bigint[][] = [leaves.slice()];
+  for (let lvl = 0; lvl < levels; lvl++) {
+    const cur = treeLevels[lvl];
+    const next: bigint[] = [];
+    for (let i = 0; i < cur.length; i += 2) {
+      const left = cur[i];
+      const right = i + 1 < cur.length ? cur[i + 1] : zeros[lvl];
+      next.push(await poseidon([left, right]));
+    }
+    treeLevels.push(next);
+  }
+
+  const root = treeLevels[levels][0] ?? zeros[levels - 1];
+
+  function pathFor(leafIndex: number): MerklePath {
+    if (leafIndex < 0 || leafIndex >= leaves.length) {
+      throw new Error(`leafIndex ${leafIndex} 超出范围 [0, ${leaves.length})`);
+    }
+    const pathElements: string[] = [];
+    const pathIndices: number[] = [];
+    let curIdx = leafIndex;
+    for (let lvl = 0; lvl < levels; lvl++) {
+      const isRight = curIdx & 1;
+      const sibIdx = isRight ? curIdx - 1 : curIdx + 1;
+      const level = treeLevels[lvl];
+      const sibling = sibIdx < level.length ? level[sibIdx] : zeros[lvl];
+      pathElements.push(sibling.toString());
+      pathIndices.push(isRight);
+      curIdx = curIdx >> 1;
+    }
+    return { pathElements, pathIndices, root };
+  }
+
+  return { leaves, treeLevels, root, zeros, pathFor };
+}
+
+// ============================================================================
+// 6. 链上扫描 (跨设备恢复 Note - 原 scanForMyNotes)
+// ============================================================================
 
 /**
  * 扫 Shield 合约所有 Deposit 事件, 挨个用 viewingKey 试解密 encryptedNote.

@@ -9,8 +9,6 @@ import { parseEther } from 'viem';
 import { getPrivacySDK } from '../sdk/privacy-sdk';
 import {
   computeCommitment as atoshiComputeCommitment,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  computeNullifier,         // 留给 Unshield (W2) 用
   deriveOwnerPubkey,
   randomBlinding,
   encryptNote,
@@ -19,6 +17,10 @@ import {
   scanForMyNotes,
   RecoveredNote,
 } from '../sdk/atoshi-crypto';
+import {
+  prepareAndProveUnshield,
+  prepareAndProveTransfer,
+} from '../sdk/zk-prover';
 import { WalletState, Transaction, TransactionType, PrivacyKeys } from '../types';
 import config from '../config';
 import { atoshiL2 } from '../wagmi.config';
@@ -310,63 +312,238 @@ export function useWallet() {
     }
   };
 
-  // 隐私转账
+  // Transfer (隐私 → 隐私) — 真实 ZK proof + Shield.transfer
+  // `to` 参数是 **Bob 的 ownerPubkey** (Bob 从他的隐私身份导出, 16 进制 string 或 decimal)
+  //  生产场景 Bob 会先把 ownerPubkey 给 Alice (扫码/IM), Alice 用它构造新 Note.
   const privateSend = async (amount: string, to: string): Promise<Transaction> => {
-    if (config.demoMode) {
-      // 演示模式：返回模拟交易
-      return {
-        id: `demo_${Date.now()}`,
-        type: TransactionType.PRIVATE_SEND,
-        amount: `${amount} ATOSHI`,
-        asset: 'ATOSHI',
-        timestamp: Date.now(),
-        from: wallet.privacyKeys.publicAddress,
-        to,
-        status: 'completed',
-        nullifier: `nf_0x${Math.random().toString(16).substr(2, 32)}`
-      };
-    }
+    if (!walletClient) throw new Error('请先连接钱包');
+    if (!wallet.privacyKeys?.isInitialized) throw new Error('请先初始化隐私身份');
 
     const amountWei = ethers.parseEther(amount);
-    return await sdk.privateSend(amountWei, to);
+    const spendingKey = BigInt(wallet.privacyKeys.spendingKey);
+    const viewingKey = BigInt(wallet.privacyKeys.viewingKey);
+
+    // 1. 解析 Bob 的 ownerPubkey (输入可以是 0x... 或十进制)
+    let bobOwnerPubkey: bigint;
+    try {
+      bobOwnerPubkey = to.startsWith('0x') ? BigInt(to) : BigInt(to);
+    } catch {
+      throw new Error(`无效的接收方 ownerPubkey: ${to}. 应是 BN254 域内的 BigInt`);
+    }
+    // 提示: V1.5 应该让 Bob 也分享 viewingPubKey, Alice 用它加密 newNote 给 Bob.
+    // 当前 demo 简化: Alice 给自己 viewingPubKey 加密(自己也能恢复, Bob 需要带外传 Note).
+    // TODO V1.5: 增加输入 Bob 的 viewingPubKey
+
+    // 2. 选一笔金额相等的本地 Note
+    const allNotes = loadNotes().filter((n: any) => !n.spent && BigInt(n.amount) === amountWei);
+    if (allNotes.length === 0) throw new Error(`找不到金额等于 ${amount} ATOSHI 的可用 Note. V1 不支持找零.`);
+    const oldNote = allNotes[0];
+    if (oldNote.leafIndex < 0) throw new Error('Note 还没确认 leafIndex,请先点"恢复 Note"');
+
+    // 3. 构造新 Note (owner = Bob)
+    const newBlinding = randomBlinding();
+    const tokenId = 0n;
+    const newCommitment = await atoshiComputeCommitment(amountWei, tokenId, bobOwnerPubkey, newBlinding);
+
+    // 加密 newNote 给自己 (兜底:Alice 自己能扫回; Bob 需 Alice 带外传完整 Note)
+    const encryptedNote = await encryptNote(
+      { amount: amountWei.toString(), tokenId: '0', blinding: newBlinding.toString() },
+      viewingPubKey(viewingKey)
+    );
+
+    // 4. 准备 provider + 生成 ZK proof
+    const provider = new ethers.JsonRpcProvider(
+      config.l2.rpcUrl,
+      { chainId: config.l2.chainId, name: 'atoshi-l2' },
+      { batchMaxCount: 1, staticNetwork: true }
+    );
+
+    console.log('[transfer] 生成 ZK proof...');
+    const { proof, root, nullifierHash } = await prepareAndProveTransfer({
+      provider,
+      shieldAddress: config.contracts.shield,
+      spendingKey,
+      oldNote: {
+        commitment: BigInt(oldNote.commitment),
+        amount: BigInt(oldNote.amount),
+        tokenId,
+        blinding: BigInt(oldNote.secret),
+        leafIndex: oldNote.leafIndex,
+      },
+      newOwnerPubkey: bobOwnerPubkey,
+      newCommitment,
+      newBlinding,
+    }, (stage) => console.log('[transfer]', stage));
+
+    // 5. 调 Shield.transfer
+    const hash = await writeContractAsync({
+      chain: atoshiL2,
+      account: walletClient.account.address as `0x${string}`,
+      address: config.contracts.shield as `0x${string}`,
+      abi: [
+        {
+          name: 'transfer',
+          type: 'function',
+          stateMutability: 'nonpayable',
+          inputs: [
+            { name: 'pA', type: 'uint256[2]' },
+            { name: 'pB', type: 'uint256[2][2]' },
+            { name: 'pC', type: 'uint256[2]' },
+            { name: 'root', type: 'uint256' },
+            { name: 'nullifierHash', type: 'uint256' },
+            { name: 'newCommitment', type: 'uint256' },
+            { name: 'encryptedNote', type: 'bytes' },
+          ],
+          outputs: [],
+        },
+      ] as const,
+      functionName: 'transfer',
+      args: [
+        [BigInt(proof.pA[0]), BigInt(proof.pA[1])],
+        [
+          [BigInt(proof.pB[0][0]), BigInt(proof.pB[0][1])],
+          [BigInt(proof.pB[1][0]), BigInt(proof.pB[1][1])],
+        ],
+        [BigInt(proof.pC[0]), BigInt(proof.pC[1])],
+        BigInt(root),
+        BigInt(nullifierHash),
+        newCommitment,
+        bytesToHex(encryptedNote) as `0x${string}`,
+      ],
+      gas: 800_000n,
+      gasPrice: 2_000_000_000n,
+    });
+
+    // 6. 标记旧 Note 已花费
+    const notes = loadNotes();
+    for (const n of notes) {
+      if (n.commitment === oldNote.commitment) { n.spent = true; n.nullifier = nullifierHash; break; }
+    }
+    localStorage.setItem('privacy_notes', JSON.stringify(notes));
+
+    return {
+      id: hash,
+      type: TransactionType.PRIVATE_SEND,
+      amount: `${amount} ATOSHI`,
+      asset: 'ATOSHI',
+      timestamp: Date.now(),
+      from: wallet.privacyKeys.publicAddress,
+      to,
+      status: 'completed',
+      txHash: hash,
+      nullifier: nullifierHash,
+    };
   };
 
-  // Unshield（提款）
+  // Unshield (隐私 → 明文) — 真实 ZK proof + Shield.withdraw
   const unshield = async (amount: string, to: string): Promise<Transaction> => {
-    if (!walletClient) {
-      throw new Error('请先连接钱包');
-    }
-
-    // 如果 signer 不存在，重新获取
-    let currentSigner = signer;
-    if (!currentSigner && window.ethereum) {
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      currentSigner = await provider.getSigner();
-      setSigner(currentSigner);
-    }
-
-    if (!currentSigner) {
-      throw new Error('无法获取 signer');
-    }
-
-    if (config.demoMode) {
-      // 演示模式：返回模拟交易
-      return {
-        id: `demo_${Date.now()}`,
-        type: TransactionType.UNSHIELD,
-        amount: `${amount} ATOSHI`,
-        asset: 'ATOSHI',
-        timestamp: Date.now(),
-        from: wallet.privacyKeys.publicAddress,
-        to,
-        status: 'completed',
-        txHash: `0x${Math.random().toString(16).substr(2, 64)}`,
-        nullifier: `nf_0x${Math.random().toString(16).substr(2, 32)}`
-      };
-    }
+    if (!walletClient) throw new Error('请先连接钱包');
+    if (!wallet.privacyKeys?.isInitialized) throw new Error('请先初始化隐私身份');
 
     const amountWei = ethers.parseEther(amount);
-    return await sdk.unshield(currentSigner, amountWei, to);
+    const spendingKey = BigInt(wallet.privacyKeys.spendingKey);
+
+    // 1. 找一笔金额足够的本地 Note
+    const allNotes = loadNotes().filter((n: any) => !n.spent && BigInt(n.amount) >= amountWei);
+    if (allNotes.length === 0) throw new Error(`找不到金额 >= ${amount} ATOSHI 的可用 Note`);
+    const note = allNotes[0];
+    // V1 简化:只支持精确金额(找零留 V1.5). 如果 note 比 amount 大,提示用户.
+    if (BigInt(note.amount) !== amountWei) {
+      throw new Error(
+        `当前 Note 金额 ${ethers.formatEther(note.amount)} ATOSHI 跟取款金额 ${amount} 不等. ` +
+        `V1 不支持自动找零, 请用相同金额或先 Transfer 拆分.`
+      );
+    }
+    if (note.leafIndex < 0) throw new Error('Note 还没确认 leafIndex (没扫到链上),请先点"恢复 Note"按钮');
+
+    // 2. 准备 provider (fork11 兼容)
+    const provider = new ethers.JsonRpcProvider(
+      config.l2.rpcUrl,
+      { chainId: config.l2.chainId, name: 'atoshi-l2' },
+      { batchMaxCount: 1, staticNetwork: true }
+    );
+
+    // 3. 重建 Merkle tree + 生成 ZK proof (耗时 10-30 秒)
+    console.log('[unshield] 开始生成 ZK proof...');
+    const { proof, root, nullifierHash } = await prepareAndProveUnshield({
+      provider,
+      shieldAddress: config.contracts.shield,
+      spendingKey,
+      note: {
+        commitment: BigInt(note.commitment),
+        amount: BigInt(note.amount),
+        tokenId: 0n,
+        blinding: BigInt(note.secret),  // secret 字段实际存的是 blinding
+        leafIndex: note.leafIndex,
+      },
+      recipientAddress: to,
+    }, (stage) => console.log('[unshield]', stage));
+
+    // 4. 调 Shield.withdraw
+    const NATIVE_TOKEN = '0x0000000000000000000000000000000000000000' as const;
+    const hash = await writeContractAsync({
+      chain: atoshiL2,
+      account: walletClient.account.address as `0x${string}`,
+      address: config.contracts.shield as `0x${string}`,
+      abi: [
+        {
+          name: 'withdraw',
+          type: 'function',
+          stateMutability: 'nonpayable',
+          inputs: [
+            { name: 'pA', type: 'uint256[2]' },
+            { name: 'pB', type: 'uint256[2][2]' },
+            { name: 'pC', type: 'uint256[2]' },
+            { name: 'root', type: 'uint256' },
+            { name: 'nullifierHash', type: 'uint256' },
+            { name: 'recipient', type: 'address' },
+            { name: 'relayer', type: 'address' },
+            { name: 'fee', type: 'uint256' },
+            { name: 'token', type: 'address' },
+            { name: 'amount', type: 'uint256' },
+          ],
+          outputs: [],
+        },
+      ] as const,
+      functionName: 'withdraw',
+      args: [
+        [BigInt(proof.pA[0]), BigInt(proof.pA[1])],
+        [
+          [BigInt(proof.pB[0][0]), BigInt(proof.pB[0][1])],
+          [BigInt(proof.pB[1][0]), BigInt(proof.pB[1][1])],
+        ],
+        [BigInt(proof.pC[0]), BigInt(proof.pC[1])],
+        BigInt(root),
+        BigInt(nullifierHash),
+        to as `0x${string}`,
+        NATIVE_TOKEN,        // relayer: 自付模式
+        0n,                  // fee: 自付
+        NATIVE_TOKEN,
+        amountWei,
+      ],
+      gas: 800_000n,
+      gasPrice: 2_000_000_000n,
+    });
+
+    // 5. 本地标记 Note 已花费
+    const notes = loadNotes();
+    for (const n of notes) {
+      if (n.commitment === note.commitment) { n.spent = true; n.nullifier = nullifierHash; break; }
+    }
+    localStorage.setItem('privacy_notes', JSON.stringify(notes));
+
+    return {
+      id: hash,
+      type: TransactionType.UNSHIELD,
+      amount: `${amount} ATOSHI`,
+      asset: 'ATOSHI',
+      timestamp: Date.now(),
+      from: wallet.privacyKeys.publicAddress,
+      to,
+      status: 'completed',
+      txHash: hash,
+      nullifier: nullifierHash,
+    };
   };
 
   // 普通转账

@@ -821,11 +821,14 @@ export function useWallet() {
 
     try {
       // 使用 Wagmi 的 sendTransaction
+      // ⚠️ fork11 L2 只接受 Type 0 (legacy) tx, 不收 EIP-1559 (Type 2)
+      // 必须显式 type: 'legacy', 否则 wagmi 默认 Type 2 → "invalid sender" 报错
       const hash = await sendTransactionAsync({
         to: to as `0x${string}`,
         value: parseEther(amount),
         gas: 21000n,
-        gasPrice: 100000000000n // 100 Gwei
+        gasPrice: 2_000_000_000n,  // 2 gwei (跟 Shield/Unshield 一致)
+        type: 'legacy',             // ⭐ fork11 必须
       });
 
       // 等待交易确认

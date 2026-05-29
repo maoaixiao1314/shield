@@ -108,7 +108,7 @@ export function useWallet() {
     console.log('initializePrivacy 被调用');
     
     if (!walletClient) {
-      throw new Error('请先连接钱包');
+      throw new Error('请先连接钱包,并切换到 Atoshi L2 链 (chain 67890)');
     }
 
     try {
@@ -165,7 +165,7 @@ export function useWallet() {
   // Shield（存款）
   const shield = async (amount: string): Promise<Transaction> => {
     if (!walletClient) {
-      throw new Error('请先连接钱包');
+      throw new Error('请先连接钱包,并切换到 Atoshi L2 链 (chain 67890)');
     }
 
     try {
@@ -341,7 +341,7 @@ export function useWallet() {
   //
   // 安全: ownerPubkey 和 viewingPubKey 都是公开值, 分享不会泄漏 Bob 的资金.
   const privateSend = async (amount: string, to: string): Promise<Transaction> => {
-    if (!walletClient) throw new Error('请先连接钱包');
+    if (!walletClient) throw new Error('请先连接钱包,并切换到 Atoshi L2 链 (chain 67890)');
     if (!wallet.privacyKeys?.isInitialized) throw new Error('请先初始化隐私身份');
 
     const amountWei = ethers.parseEther(amount);
@@ -481,7 +481,7 @@ export function useWallet() {
 
   // Unshield (隐私 → 明文) — 真实 ZK proof + Shield.withdraw
   const unshield = async (amount: string, to: string): Promise<Transaction> => {
-    if (!walletClient) throw new Error('请先连接钱包');
+    if (!walletClient) throw new Error('请先连接钱包,并切换到 Atoshi L2 链 (chain 67890)');
     if (!wallet.privacyKeys?.isInitialized) throw new Error('请先初始化隐私身份');
 
     const amountWei = ethers.parseEther(amount);
@@ -593,7 +593,7 @@ export function useWallet() {
   // 普通转账
   const transfer = async (amount: string, to: string): Promise<Transaction> => {
     if (!walletClient) {
-      throw new Error('请先连接钱包');
+      throw new Error('请先连接钱包,并切换到 Atoshi L2 链 (chain 67890)');
     }
 
     try {

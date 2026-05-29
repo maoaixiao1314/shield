@@ -8,7 +8,8 @@ import ActionModal from './components/ActionModal';
 import SetupPrivacy from './components/SetupPrivacy';
 import { History, Send, Shield } from 'lucide-react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useAccount, useBalance } from 'wagmi';
+import { useAccount, useBalance, useChainId, useSwitchChain } from 'wagmi';
+import { atoshiL2 } from './wagmi.config';
 import { useWallet } from './hooks/useWallet';
 
 const App: React.FC = () => {
@@ -19,6 +20,9 @@ const App: React.FC = () => {
   
   const { address, isConnected } = useAccount();
   const { data: balance } = useBalance({ address });
+  const currentChainId = useChainId();
+  const { switchChain } = useSwitchChain();
+  const isOnAtoshiL2 = currentChainId === atoshiL2.id;
   
   const {
     wallet,
@@ -52,6 +56,18 @@ const App: React.FC = () => {
   const handleAction = (type: TransactionType) => {
     if (!isConnected) {
       alert('请先连接钱包！');
+      return;
+    }
+    // 钱包连了,但 chain 不对 → 提示切链, 自动切到 Atoshi L2
+    if (!isOnAtoshiL2) {
+      const ok = window.confirm(
+        `您当前钱包不在 Atoshi L2 链上(chain ${currentChainId})。\n\n` +
+        `Atoshi 隐私交易只在 L2 (chain ${atoshiL2.id}) 上运行。\n` +
+        `是否切换到 Atoshi L2?`
+      );
+      if (ok && switchChain) {
+        switchChain({ chainId: atoshiL2.id });
+      }
       return;
     }
     setActiveAction(type);

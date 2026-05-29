@@ -37,8 +37,9 @@ const App: React.FC = () => {
   const [isRecovering, setIsRecovering] = useState(false);
 
   const handleRecoverNotes = async () => {
+    if (!ensureConnectedAndOnL2()) return;
     if (!wallet.privacyKeys?.isInitialized) {
-      alert('请先连接钱包并初始化隐私身份');
+      alert('请先初始化隐私身份(点 "Setup Privacy")');
       return;
     }
     setIsRecovering(true);
@@ -53,23 +54,29 @@ const App: React.FC = () => {
     }
   };
 
-  const handleAction = (type: TransactionType) => {
+  // 通用前置检查: 已连接 + 在 Atoshi L2 链上. 返回 false 表示不通过(已弹提示)
+  const ensureConnectedAndOnL2 = (): boolean => {
     if (!isConnected) {
       alert('请先连接钱包！');
-      return;
+      return false;
     }
-    // 钱包连了,但 chain 不对 → 提示切链, 自动切到 Atoshi L2
     if (!isOnAtoshiL2) {
       const ok = window.confirm(
-        `您当前钱包不在 Atoshi L2 链上(chain ${currentChainId})。\n\n` +
+        `您当前钱包不在 Atoshi L2 链上 (current chain: ${currentChainId})。\n\n` +
         `Atoshi 隐私交易只在 L2 (chain ${atoshiL2.id}) 上运行。\n` +
-        `是否切换到 Atoshi L2?`
+        `是否切换到 Atoshi L2?\n\n` +
+        `(如果 MetaMask 提示"未知网络",请同意添加并切换)`
       );
       if (ok && switchChain) {
         switchChain({ chainId: atoshiL2.id });
       }
-      return;
+      return false;
     }
+    return true;
+  };
+
+  const handleAction = (type: TransactionType) => {
+    if (!ensureConnectedAndOnL2()) return;
     setActiveAction(type);
     setModalOpen(true);
   };
@@ -80,12 +87,13 @@ const App: React.FC = () => {
   };
 
   const handleInitializePrivacy = async () => {
+    if (!ensureConnectedAndOnL2()) return;
     try {
       await initializePrivacy();
       alert('隐私密钥初始化成功！');
     } catch (error) {
       console.error('初始化失败:', error);
-      alert('初始化失败，请重试');
+      alert('初始化失败，请重试: ' + (error as any)?.message);
     }
   };
 
@@ -147,6 +155,53 @@ const App: React.FC = () => {
         <div className={`absolute bottom-[-10%] right-[-20%] w-[300px] h-[300px] rounded-full blur-[100px] opacity-20 transition-all duration-700 ${activeAsset === AssetType.PUBLIC ? 'bg-indigo-300' : 'bg-pink-600'}`} />
 
         <Header wallet={walletState} activeAsset={activeAsset} />
+
+        {/* 全局警告 banner: 连了钱包但不在 Atoshi L2 链上, 一直显示直到切链 */}
+        {isConnected && !isOnAtoshiL2 && (
+          <div className="mx-4 mt-2 z-10 bg-amber-500/10 border border-amber-500/40 rounded-xl p-3 text-xs">
+            <p className="font-bold text-amber-400">⚠️ 当前不在 Atoshi L2 链上</p>
+            <p className="text-amber-200/80 mt-1">
+              当前 chain: {currentChainId} → 需要切换到 Atoshi L2 (chain {atoshiL2.id})
+            </p>
+            <p className="text-amber-200/60 mt-2 text-[10px]">
+              💡 如果 MetaMask 没有添加过 Atoshi L2,点下面按钮会自动添加.
+            </p>
+            <div className="mt-2 flex gap-2">
+              <button
+                onClick={async () => {
+                  // 用 wallet_addEthereumChain 强制添加并切链
+                  // 这个比 useSwitchChain 更可靠:
+                  //   useSwitchChain 在链不存在时会失败,而这个会先添加再切
+                  if (!(window as any).ethereum) return alert('未检测到钱包扩展');
+                  try {
+                    await (window as any).ethereum.request({
+                      method: 'wallet_addEthereumChain',
+                      params: [{
+                        chainId: '0x' + atoshiL2.id.toString(16),
+                        chainName: atoshiL2.name,
+                        nativeCurrency: atoshiL2.nativeCurrency,
+                        rpcUrls: ['http://52.76.210.218:8123'],
+                        blockExplorerUrls: ['http://52.76.210.218:4001'],
+                      }],
+                    });
+                  } catch (e: any) {
+                    alert('添加失败: ' + (e?.message || e));
+                  }
+                }}
+                className="flex-1 px-3 py-2 rounded-lg bg-amber-500 text-zinc-900 text-[10px] font-bold uppercase tracking-widest hover:bg-amber-400"
+              >
+                ➕ 添加并切换到 Atoshi L2
+              </button>
+              <button
+                onClick={() => switchChain && switchChain({ chainId: atoshiL2.id })}
+                className="px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-300 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-700"
+                title="仅切换 (链已添加过用这个)"
+              >
+                切换
+              </button>
+            </div>
+          </div>
+        )}
 
         <main className="flex-1 px-6 pt-4 pb-24 z-10">
           <AssetToggle activeAsset={activeAsset} setActiveAsset={setActiveAsset} />

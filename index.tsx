@@ -17,6 +17,14 @@ const queryClient = new QueryClient();
 const rootElement = document.getElementById('root');
 if (!rootElement) throw new Error("Could not find root element");
 
+// ============================================================================
+// BigInt 全局序列化补丁
+// 默认 JSON.stringify(10n) 抛 "Do not know how to serialize a BigInt".
+// 这破坏了任何写 localStorage / 调 RPC 的库.
+// 这里加 toJSON() 让 BigInt 序列化为字符串. 业界标准 hack.
+// ============================================================================
+;(BigInt.prototype as any).toJSON = function () { return this.toString(); };
+
 if (typeof crypto === 'undefined' || !crypto.subtle) {
   rootElement.innerHTML = `
     <div style="max-width: 600px; margin: 80px auto; padding: 40px; font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; color: #fff; background: #0a0a0a; border: 1px solid #ef4444; border-radius: 16px;">

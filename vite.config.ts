@@ -1,6 +1,7 @@
 import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
+import { nodePolyfills } from 'vite-plugin-node-polyfills';
 
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
@@ -9,10 +10,19 @@ export default defineConfig(({ mode }) => {
         port: 3000,
         host: '0.0.0.0',
       },
-      plugins: [react()],
+      plugins: [
+        react(),
+        // 注入 Node.js 全局变量 (Buffer / process / global) 到浏览器.
+        // 必须的: snarkjs / circomlibjs / blake-hash 等 crypto 库假设 Node 环境.
+        // 不加这个: "Buffer is not defined" 整页崩溃.
+        nodePolyfills({
+          globals: { Buffer: true, global: true, process: true },
+          protocolImports: true,
+        }),
+      ],
       define: {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
+        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
       },
       resolve: {
         alias: {

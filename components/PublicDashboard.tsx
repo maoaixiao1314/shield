@@ -26,7 +26,7 @@ const PublicDashboard: React.FC<PublicDashboardProps> = ({ wallet, transactions,
           <div className="p-3 bg-blue-50 text-blue-600 rounded-full mb-2 group-hover:scale-110 transition-transform">
             <ArrowUpRight size={24} />
           </div>
-          <span className="text-sm font-bold text-slate-700">Send ETH</span>
+          <span className="text-sm font-bold text-slate-700">Send ATOSHI</span>
         </button>
 
         <button 

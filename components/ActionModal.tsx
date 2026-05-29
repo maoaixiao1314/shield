@@ -21,7 +21,7 @@ const ActionModal: React.FC<ActionModalProps> = ({ isOpen, onClose, type, active
 
   const getTitle = () => {
     switch (type) {
-      case TransactionType.TRANSFER: return 'Send ETH';
+      case TransactionType.TRANSFER: return 'Send ATOSHI';
       case TransactionType.PRIVATE_SEND: return 'Privacy Send';
       case TransactionType.SHIELD: return 'Shield Funds';
       case TransactionType.UNSHIELD: return 'Unshield Funds';
@@ -30,7 +30,9 @@ const ActionModal: React.FC<ActionModalProps> = ({ isOpen, onClose, type, active
   };
 
   const handleConfirm = async () => {
-    if (!amount || !to) return;
+    // Shield 不需要 to (存进自己池子,业务层会用自己的 publicAddress)
+    if (!amount) return;
+    if (type !== TransactionType.SHIELD && !to) return;
     setIsProcessing(true);
 
     // Simulate ZK-Proof generation for privacy tasks
@@ -82,34 +84,42 @@ const ActionModal: React.FC<ActionModalProps> = ({ isOpen, onClose, type, active
             </div>
           </div>
 
-          <div>
-            <label className={`block text-[10px] font-black uppercase tracking-widest mb-1.5 ${isDark ? 'text-purple-400' : 'text-blue-600'}`}>
-              {type === TransactionType.PRIVATE_SEND ? 'Receiver Privacy Address' : 'Receiver Address'}
-            </label>
-            <div className={`relative rounded-2xl border transition-all ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-slate-50 border-slate-200'} focus-within:ring-2 ${isDark ? 'focus-within:ring-purple-500/30' : 'focus-within:ring-blue-500/20'}`}>
-              <input
-                value={to}
-                onChange={(e) => setTo(e.target.value)}
-                placeholder={
-                  type === TransactionType.PRIVATE_SEND
-                    ? '粘贴对方收款码 或 点右侧扫码 →'
-                    : (isDark ? 'zk_atos_...' : '0x...')
-                }
-                className="w-full bg-transparent p-4 pr-14 text-xs font-medium mono outline-none"
-              />
-              {/* 扫码按钮 — 只在隐私转账时出现 */}
-              {type === TransactionType.PRIVATE_SEND && (
-                <button
-                  onClick={() => setShowScanner(true)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-colors"
-                  title="扫描对方二维码"
-                  type="button"
-                >
-                  <QrCode size={18} />
-                </button>
-              )}
+          {/* Shield 类型: 钱存进自己的隐私池, 不需要 recipient 输入框 */}
+          {type === TransactionType.SHIELD ? (
+            <div className={`p-3 rounded-2xl border ${isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-400' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+              <span className="text-[10px] font-bold uppercase tracking-widest opacity-60">存入到</span>
+              <p className="mt-1 text-xs">您自己的隐私池 (无需填写接收地址)</p>
             </div>
-          </div>
+          ) : (
+            <div>
+              <label className={`block text-[10px] font-black uppercase tracking-widest mb-1.5 ${isDark ? 'text-purple-400' : 'text-blue-600'}`}>
+                {type === TransactionType.PRIVATE_SEND ? 'Receiver Privacy Address' : 'Receiver Address'}
+              </label>
+              <div className={`relative rounded-2xl border transition-all ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-slate-50 border-slate-200'} focus-within:ring-2 ${isDark ? 'focus-within:ring-purple-500/30' : 'focus-within:ring-blue-500/20'}`}>
+                <input
+                  value={to}
+                  onChange={(e) => setTo(e.target.value)}
+                  placeholder={
+                    type === TransactionType.PRIVATE_SEND
+                      ? '粘贴对方收款码 或 点右侧扫码 →'
+                      : (isDark ? 'zk_atos_...' : '0x...')
+                  }
+                  className="w-full bg-transparent p-4 pr-14 text-xs font-medium mono outline-none"
+                />
+                {/* 扫码按钮 — 只在隐私转账时出现 */}
+                {type === TransactionType.PRIVATE_SEND && (
+                  <button
+                    onClick={() => setShowScanner(true)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-colors"
+                    title="扫描对方二维码"
+                    type="button"
+                  >
+                    <QrCode size={18} />
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* 隐私转账时弹层扫码器 */}
           {showScanner && (
@@ -141,7 +151,7 @@ const ActionModal: React.FC<ActionModalProps> = ({ isOpen, onClose, type, active
           )}
 
           <button 
-            disabled={isProcessing || !amount || !to}
+            disabled={isProcessing || !amount || (type !== TransactionType.SHIELD && !to)}
             onClick={handleConfirm}
             className={`w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100 ${
               isDark ? 'privacy-gradient text-white' : 'public-gradient text-white'

@@ -15,28 +15,39 @@ const Header: React.FC<HeaderProps> = ({ wallet, activeAsset }) => {
   const { disconnect } = useDisconnect();
 
   const handleDisconnect = () => {
-    if (window.confirm('断开钱包连接并清除本地缓存的 session?\n\n(用于切换账户/清除幽灵 session)')) {
-      // 断开 wagmi
+    if (window.confirm(
+      '⚠️ 完整重置:\n\n' +
+      '1. 断开钱包\n' +
+      '2. 清除 WalletConnect session 缓存\n' +
+      '3. 清除隐私 keys (privacy_keys)\n' +
+      '4. 清除本地 Note 缓存 (privacy_notes)\n' +
+      '5. 清除扫链进度 (last_scanned_block)\n\n' +
+      '⚠️ 注意: 本地 Note 清除后无法恢复! 链上的 Note 会用新派生的 keys 重新扫描 ' +
+      '(如果是同一个 EOA 签的 EIP-712, 跨设备恢复会拉回所有属于你的 Note).\n\n' +
+      '确定继续?'
+    )) {
       disconnect();
-      // 清除所有 wagmi / WalletConnect 缓存的 localStorage 数据
-      // (key 前缀: 'wagmi.', 'wc@', '@w3m', 'WCM_')
+      // 强力清除: localStorage 全部清空 (除了浏览器其他网站可能用的, 但 localhost:3000 只我们用)
       const keysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (key && (
-          key.startsWith('wagmi.') ||
-          key.startsWith('wc@') ||
-          key.startsWith('@w3m') ||
-          key.startsWith('WCM_') ||
-          key.includes('walletconnect')
-        )) {
-          keysToRemove.push(key);
-        }
+        if (key) keysToRemove.push(key);
       }
       for (const k of keysToRemove) localStorage.removeItem(k);
-      console.log(`已清除 ${keysToRemove.length} 个 wagmi/WC 缓存项`);
-      // 重载页面让 UI 状态干净
-      setTimeout(() => window.location.reload(), 200);
+      // sessionStorage 也清
+      try { sessionStorage.clear(); } catch {}
+      // IndexedDB (wallet connect v2 用这个) — best effort
+      try {
+        if ((window as any).indexedDB?.databases) {
+          (window as any).indexedDB.databases().then((dbs: any[]) => {
+            dbs?.forEach((db: any) => {
+              if (db.name) (window as any).indexedDB.deleteDatabase(db.name);
+            });
+          });
+        }
+      } catch {}
+      console.log(`✓ 已完整清除 ${keysToRemove.length} 项 localStorage + sessionStorage`);
+      setTimeout(() => window.location.reload(), 500);
     }
   };
   

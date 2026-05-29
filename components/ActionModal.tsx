@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { TransactionType, AssetType } from '../types';
-import { X, Loader2, Sparkles, ShieldCheck } from 'lucide-react';
+import { X, Loader2, Sparkles, ShieldCheck, QrCode } from 'lucide-react';
+import QRCodeScanner from './QRCodeScanner';
 
 interface ActionModalProps {
   isOpen: boolean;
@@ -16,6 +17,7 @@ const ActionModal: React.FC<ActionModalProps> = ({ isOpen, onClose, type, active
   const [to, setTo] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [proofProgress, setProofProgress] = useState(0);
+  const [showScanner, setShowScanner] = useState(false);
 
   const getTitle = () => {
     switch (type) {
@@ -75,7 +77,7 @@ const ActionModal: React.FC<ActionModalProps> = ({ isOpen, onClose, type, active
                 className="w-full bg-transparent p-4 text-lg font-bold outline-none"
               />
               <span className="absolute right-4 top-1/2 -translate-y-1/2 font-black text-xs opacity-40 uppercase">
-                {activeAsset === AssetType.PUBLIC ? 'ETH' : 'ATOS'}
+                ATOSHI
               </span>
             </div>
           </div>
@@ -85,14 +87,40 @@ const ActionModal: React.FC<ActionModalProps> = ({ isOpen, onClose, type, active
               {type === TransactionType.PRIVATE_SEND ? 'Receiver Privacy Address' : 'Receiver Address'}
             </label>
             <div className={`relative rounded-2xl border transition-all ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-slate-50 border-slate-200'} focus-within:ring-2 ${isDark ? 'focus-within:ring-purple-500/30' : 'focus-within:ring-blue-500/20'}`}>
-              <input 
+              <input
                 value={to}
                 onChange={(e) => setTo(e.target.value)}
-                placeholder={isDark ? "zk_atos_..." : "0x..."}
-                className="w-full bg-transparent p-4 text-xs font-medium mono outline-none"
+                placeholder={
+                  type === TransactionType.PRIVATE_SEND
+                    ? '粘贴对方收款码 或 点右侧扫码 →'
+                    : (isDark ? 'zk_atos_...' : '0x...')
+                }
+                className="w-full bg-transparent p-4 pr-14 text-xs font-medium mono outline-none"
               />
+              {/* 扫码按钮 — 只在隐私转账时出现 */}
+              {type === TransactionType.PRIVATE_SEND && (
+                <button
+                  onClick={() => setShowScanner(true)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-colors"
+                  title="扫描对方二维码"
+                  type="button"
+                >
+                  <QrCode size={18} />
+                </button>
+              )}
             </div>
           </div>
+
+          {/* 隐私转账时弹层扫码器 */}
+          {showScanner && (
+            <QRCodeScanner
+              onScan={(text) => {
+                setTo(text);
+                setShowScanner(false);
+              }}
+              onClose={() => setShowScanner(false)}
+            />
+          )}
 
           {isProcessing && proofProgress > 0 && (
             <div className="space-y-2 py-4 animate-in fade-in">

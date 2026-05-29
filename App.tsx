@@ -120,7 +120,8 @@ const App: React.FC = () => {
   const walletState = {
     ...wallet,
     address: address || '',
-    publicBalance: balance ? `${parseFloat(balance.formatted).toFixed(4)} ${balance.symbol}` : '0 ETH'
+    // 强制显示 ATOSHI(不信钱包返回的 symbol — MetaMask 等会用户自定义链时存了不准的 symbol)
+    publicBalance: balance ? `${parseFloat(balance.formatted).toFixed(4)} ATOSHI` : '0 ATOSHI'
   };
 
   return (

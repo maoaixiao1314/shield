@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { WalletState, Transaction, TransactionType } from '../types';
 import { Ghost, ShieldX, Sparkles, Key, Info, ExternalLink, Eye, EyeOff } from 'lucide-react';
 import HistoryItem from './HistoryItem';
+import QRCodeDisplay from './QRCodeDisplay';
 
 interface PrivateDashboardProps {
   wallet: WalletState;
@@ -111,19 +112,30 @@ const PrivateDashboard: React.FC<PrivateDashboardProps> = ({ wallet, transaction
 
             {/* 我的隐私收款码 — 别人 transfer 给我用 */}
             {(wallet.privacyKeys as any).receivingCode && (
-              <div className="mt-3 bg-zinc-950 p-3 rounded-xl border border-zinc-800">
-                <span className="text-[9px] font-black uppercase text-emerald-500 tracking-tighter">我的隐私收款码 (给别人转账给我)</span>
-                <div className="mt-2 break-all text-[10px] font-mono text-zinc-400 bg-zinc-900 p-2 rounded">
-                  {(wallet.privacyKeys as any).receivingCode}
+              <div className="mt-3 bg-zinc-950 p-4 rounded-xl border border-zinc-800">
+                <span className="text-[9px] font-black uppercase text-emerald-500 tracking-tighter">我的隐私收款码 (别人转账给我用)</span>
+
+                {/* 二维码 - 主要分享方式, 对方扫一下就 OK */}
+                <div className="mt-3 flex justify-center bg-zinc-950 p-3 rounded-lg">
+                  <QRCodeDisplay data={(wallet.privacyKeys as any).receivingCode} size={200} />
                 </div>
+
+                {/* 同时也提供纯文本(适合 IM/邮件粘贴) */}
+                <details className="mt-3">
+                  <summary className="text-[10px] text-zinc-500 cursor-pointer hover:text-zinc-300">▸ 显示文本格式 (粘贴到聊天软件用)</summary>
+                  <div className="mt-2 break-all text-[10px] font-mono text-zinc-400 bg-zinc-900 p-2 rounded max-h-32 overflow-y-auto">
+                    {(wallet.privacyKeys as any).receivingCode}
+                  </div>
+                </details>
+
                 <button
                   onClick={() => {
                     navigator.clipboard.writeText((wallet.privacyKeys as any).receivingCode);
-                    alert('收款码已复制! 把这串字符发给对方,对方 "Private Send" 时粘贴即可');
+                    alert('收款码已复制! 把它发给对方,对方在 "Shielded Send" 时粘贴(或扫上面的二维码)');
                   }}
-                  className="mt-2 w-full py-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-500/20 transition-colors"
+                  className="mt-3 w-full py-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-500/20 transition-colors"
                 >
-                  📋 复制收款码
+                  📋 复制收款码到剪贴板
                 </button>
               </div>
             )}

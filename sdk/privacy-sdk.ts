@@ -1,19 +1,19 @@
 /**
  * Atoshi Privacy SDK
- * 
- * 提供完整的隐私交易功能：
- * - 密钥派生（基于 EIP-712 签名）
- * - Shield（存款）
- * - 隐私转账
- * - Unshield（提款）
- * - Note 扫描和余额查询
+ *
+ * Provides complete privacy transaction functionality:
+ * - Key derivation (based on EIP-712 signatures)
+ * - Shield (deposit)
+ * - Private transfers
+ * - Unshield (withdrawal)
+ * - Note scanning and balance queries
  */
 
 import { ethers } from 'ethers';
 import { PrivacyKeys, Note, Transaction, TransactionType } from '../types';
 
-// Poseidon Hash 模拟（实际应该使用 circomlibjs）
-// TODO: 替换为真实的 Poseidon Hash
+// Poseidon Hash simulation (should actually use circomlibjs)
+// TODO: Replace with the real Poseidon Hash
 function poseidonHash(...inputs: string[]): string {
   const combined = inputs.join('');
   return ethers.keccak256(ethers.toUtf8Bytes(combined));
@@ -26,9 +26,9 @@ export class PrivacySDK {
 
   constructor(rpcUrl: string, shieldAddress?: string) {
     this.provider = new ethers.JsonRpcProvider(rpcUrl);
-    
+
     if (shieldAddress) {
-      // Shield 合约 ABI（简化版）
+      // Shield contract ABI (simplified version)
       const shieldABI = [
         'function deposit(bytes32 commitment) external payable',
         'function withdraw(bytes proof, bytes32 nullifier, address recipient, uint256 amount) external',
@@ -37,51 +37,51 @@ export class PrivacySDK {
         'event Deposit(bytes32 indexed commitment, uint256 leafIndex, uint256 timestamp)',
         'event Withdrawal(address indexed recipient, bytes32 nullifier, uint256 amount)'
       ];
-      
+
       this.shieldContract = new ethers.Contract(shieldAddress, shieldABI, this.provider);
     }
-    
-    // 尝试从 localStorage 加载已保存的密钥
+
+    // Attempt to load saved keys from localStorage
     this.loadPrivacyKeys();
   }
-  
+
   /**
-   * 从 localStorage 加载隐私密钥
+   * Load privacy keys from localStorage
    */
   private loadPrivacyKeys(): void {
     try {
       const stored = localStorage.getItem('privacy_keys');
       if (stored) {
         this.privacyKeys = JSON.parse(stored);
-        console.log('SDK: 已加载保存的隐私密钥');
+        console.log('SDK: Loaded saved privacy keys');
       }
     } catch (error) {
-      console.error('SDK: 加载隐私密钥失败:', error);
+      console.error('SDK: Failed to load privacy keys:', error);
     }
-  }
-  
-  /**
-   * 设置隐私密钥（供外部调用）
-   */
-  setPrivacyKeys(keys: PrivacyKeys): void {
-    this.privacyKeys = keys;
-    console.log('SDK: 隐私密钥已设置');
   }
 
   /**
-   * 1. 密钥派生（基于 EIP-712 签名）
+   * Set privacy keys (for external calls)
+   */
+  setPrivacyKeys(keys: PrivacyKeys): void {
+    this.privacyKeys = keys;
+    console.log('SDK: Privacy keys have been set');
+  }
+
+  /**
+   * 1. Key derivation (based on EIP-712 signatures)
    */
   async deriveKeys(signer: ethers.Signer): Promise<PrivacyKeys> {
     const address = await signer.getAddress();
     const chainId = (await this.provider.getNetwork()).chainId;
 
     // EIP-712 Domain
-    // 使用固定的合约地址，而不是用户地址
+    // Use a fixed contract address instead of the user address
     const domain = {
       name: 'Atoshi Privacy',
       version: '1',
       chainId: Number(chainId),
-      verifyingContract: '0x0000000000000000000000000000000000000001' // 使用固定地址
+      verifyingContract: '0x0000000000000000000000000000000000000001' // Use a fixed address
     };
 
     // EIP-712 Message
@@ -99,14 +99,14 @@ export class PrivacySDK {
       timestamp: Math.floor(Date.now() / 1000)
     };
 
-    // 签名
+    // Sign
     const signature = await signer.signTypedData(domain, types, message);
 
-    // 派生密钥
+    // Derive keys
     const seed = poseidonHash(signature);
     const spendingKey = poseidonHash(seed, 'spending');
     const viewingKey = poseidonHash(seed, 'viewing');
-    const publicAddress = poseidonHash(spendingKey).slice(0, 42); // 模拟公钥
+    const publicAddress = poseidonHash(spendingKey).slice(0, 42); // Simulated public key
 
     const keys: PrivacyKeys = {
       spendingKey,
@@ -120,7 +120,7 @@ export class PrivacySDK {
   }
 
   /**
-   * 2. Shield（存款）- 明文 → 隐私
+   * 2. Shield (deposit) - plaintext -> private
    */
   async shield(
     signer: ethers.Signer,
@@ -135,21 +135,21 @@ export class PrivacySDK {
       throw new Error('Privacy keys not initialized. Call deriveKeys() first.');
     }
 
-    // 生成 Note
+    // Generate Note
     const note = this.generateNote(
       amount,
       recipient || this.privacyKeys.publicAddress
     );
 
-    // 生成 Commitment
+    // Generate Commitment
     const commitment = this.computeCommitment(note);
 
-    // 调用合约
+    // Call the contract
     const contract = this.shieldContract.connect(signer);
     const tx = await contract.deposit(commitment, { value: amount });
     const receipt = await tx.wait();
 
-    // 保存 Note 到本地存储
+    // Save the Note to local storage
     this.saveNote(note);
 
     return {
@@ -166,7 +166,7 @@ export class PrivacySDK {
   }
 
   /**
-   * 3. 隐私转账（隐私 → 隐私）
+   * 3. Private transfer (private -> private)
    */
   async privateSend(
     amount: bigint,
@@ -176,38 +176,38 @@ export class PrivacySDK {
       throw new Error('Privacy keys not initialized');
     }
 
-    // 1. 选择要消耗的 Note
+    // 1. Select the Notes to spend
     const inputNotes = await this.selectNotes(amount);
-    
-    // 2. 生成新的 Note（给接收方）
+
+    // 2. Generate a new Note (for the recipient)
     const outputNote = this.generateNote(amount, recipientAddress);
-    
-    // 3. 计算找零（如果有）
+
+    // 3. Calculate the change (if any)
     const totalInput = inputNotes.reduce((sum, note) => sum + note.amount, 0n);
     const change = totalInput - amount;
-    const changeNote = change > 0n 
+    const changeNote = change > 0n
       ? this.generateNote(change, this.privacyKeys.publicAddress)
       : null;
 
-    // 4. 生成 Nullifiers
+    // 4. Generate Nullifiers
     const nullifiers = inputNotes.map(note => this.computeNullifier(note));
 
-    // 5. 生成 ZK Proof（模拟）
+    // 5. Generate ZK Proof (simulated)
     const proof = await this.generateProof({
       inputNotes,
       outputNotes: changeNote ? [outputNote, changeNote] : [outputNote],
       nullifiers
     });
 
-    // 6. 提交到 Sequencer（模拟）
-    // TODO: 实际应该调用 Sequencer API
+    // 6. Submit to the Sequencer (simulated)
+    // TODO: Should actually call the Sequencer API
     const txId = `priv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-    // 7. 保存新 Note
+    // 7. Save the new Notes
     this.saveNote(outputNote);
     if (changeNote) this.saveNote(changeNote);
 
-    // 8. 标记旧 Note 为已使用
+    // 8. Mark the old Notes as spent
     inputNotes.forEach(note => this.markNoteAsSpent(note));
 
     return {
@@ -224,7 +224,7 @@ export class PrivacySDK {
   }
 
   /**
-   * 4. Unshield（提款）- 隐私 → 明文
+   * 4. Unshield (withdrawal) - private -> plaintext
    */
   async unshield(
     signer: ethers.Signer,
@@ -239,13 +239,13 @@ export class PrivacySDK {
       throw new Error('Privacy keys not initialized');
     }
 
-    // 1. 选择要消耗的 Note
+    // 1. Select the Notes to spend
     const inputNotes = await this.selectNotes(amount);
 
-    // 2. 生成 Nullifier
+    // 2. Generate Nullifier
     const nullifier = this.computeNullifier(inputNotes[0]);
 
-    // 3. 生成 ZK Proof
+    // 3. Generate ZK Proof
     const proof = await this.generateProof({
       inputNotes,
       outputNotes: [],
@@ -254,12 +254,12 @@ export class PrivacySDK {
       publicRecipient: recipient
     });
 
-    // 4. 调用合约
+    // 4. Call the contract
     const contract = this.shieldContract.connect(signer);
     const tx = await contract.withdraw(proof, nullifier, recipient, amount);
     const receipt = await tx.wait();
 
-    // 5. 标记 Note 为已使用
+    // 5. Mark the Note as spent
     inputNotes.forEach(note => this.markNoteAsSpent(note));
 
     return {
@@ -277,44 +277,44 @@ export class PrivacySDK {
   }
 
   /**
-   * 5. 扫描 Note（查询余额）
+   * 5. Scan Notes (query balance)
    */
   async scanNotes(): Promise<Note[]> {
     if (!this.shieldContract || !this.privacyKeys) {
       return [];
     }
 
-    // 从本地存储加载 Note
+    // Load Notes from local storage
     const notes = this.loadNotes();
-    
-    // TODO: 从链上事件扫描新的 Note
+
+    // TODO: Scan new Notes from on-chain events
     // const filter = this.shieldContract.filters.Deposit();
     // const events = await this.shieldContract.queryFilter(filter);
-    
+
     return notes.filter(note => !note.spent);
   }
 
   /**
-   * 获取隐私余额
+   * Get the private balance
    */
   async getPrivateBalance(): Promise<bigint> {
     const notes = await this.scanNotes();
     return notes.reduce((sum, note) => sum + note.amount, 0n);
   }
 
-  // ==================== 辅助方法 ====================
+  // ==================== Helper methods ====================
 
   private generateNote(amount: bigint, recipient: string): Note {
     const secret = ethers.hexlify(ethers.randomBytes(32));
     const nullifier = ethers.hexlify(ethers.randomBytes(32));
-    
+
     return {
       amount,
       secret,
       nullifier,
       recipient,
       spent: false,
-      leafIndex: -1 // 将在存款时更新
+      leafIndex: -1 // Will be updated at deposit time
     };
   }
 
@@ -355,16 +355,16 @@ export class PrivacySDK {
   }
 
   private async generateProof(inputs: any): Promise<string> {
-    // TODO: 调用真实的 Prover
-    // 这里返回模拟的 proof
+    // TODO: Call the real Prover
+    // Returns a simulated proof here
     return ethers.hexlify(ethers.randomBytes(128));
   }
 
-  // ==================== 本地存储 ====================
+  // ==================== Local storage ====================
 
   private saveNote(note: Note): void {
     const notes = this.loadNotes();
-    // 将 BigInt 转换为字符串以便序列化
+    // Convert BigInt to string for serialization
     const serializedNote = {
       amount: note.amount.toString(),
       secret: note.secret,
@@ -374,8 +374,8 @@ export class PrivacySDK {
       leafIndex: note.leafIndex
     };
     notes.push(note);
-    
-    // 序列化时转换 BigInt
+
+    // Convert BigInt during serialization
     const serializedNotes = notes.map(n => ({
       amount: n.amount.toString(),
       secret: n.secret,
@@ -384,7 +384,7 @@ export class PrivacySDK {
       spent: n.spent,
       leafIndex: n.leafIndex
     }));
-    
+
     localStorage.setItem('privacy_notes', JSON.stringify(serializedNotes));
   }
 
@@ -392,9 +392,9 @@ export class PrivacySDK {
     try {
       const stored = localStorage.getItem('privacy_notes');
       if (!stored) return [];
-      
+
       const parsed = JSON.parse(stored);
-      // 将字符串转换回 BigInt
+      // Convert strings back to BigInt
       return parsed.map((n: any) => ({
         amount: BigInt(n.amount),
         secret: n.secret,
@@ -404,7 +404,7 @@ export class PrivacySDK {
         leafIndex: n.leafIndex
       }));
     } catch (error) {
-      console.error('SDK: 加载 Notes 失败:', error);
+      console.error('SDK: Failed to load Notes:', error);
       return [];
     }
   }
@@ -414,8 +414,8 @@ export class PrivacySDK {
     const index = notes.findIndex(n => n.nullifier === note.nullifier);
     if (index !== -1) {
       notes[index].spent = true;
-      
-      // 序列化时转换 BigInt
+
+      // Convert BigInt during serialization
       const serializedNotes = notes.map(n => ({
         amount: n.amount.toString(),
         secret: n.secret,
@@ -424,13 +424,13 @@ export class PrivacySDK {
         spent: n.spent,
         leafIndex: n.leafIndex
       }));
-      
+
       localStorage.setItem('privacy_notes', JSON.stringify(serializedNotes));
     }
   }
 }
 
-// 导出单例
+// Export singleton
 let sdkInstance: PrivacySDK | null = null;
 
 export function getPrivacySDK(rpcUrl: string, shieldAddress?: string): PrivacySDK {

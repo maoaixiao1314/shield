@@ -1,298 +1,297 @@
-# Atoshi Privacy Wallet - 完整技术说明
+# Atoshi Privacy Wallet - Complete Technical Guide
 
-## 📦 项目结构
+## 📦 Project Structure
 
 ```
 shield/
 ├── sdk/
-│   ├── privacy-sdk.ts       # 核心 SDK（密钥派生、交易）
-│   └── wasm-prover.ts       # WASM Prover 封装
+│   ├── privacy-sdk.ts       # Core SDK (key derivation, transactions)
+│   └── wasm-prover.ts       # WASM Prover wrapper
 ├── hooks/
-│   └── useWallet.ts         # React Hook（连接钱包、调用 SDK）
-├── components/              # UI 组件
-├── config.ts                # 配置文件
-├── types.ts                 # TypeScript 类型定义
-└── App.tsx                  # 主应用
+│   └── useWallet.ts         # React Hook (connect wallet, call SDK)
+├── components/              # UI components
+├── config.ts                # Configuration file
+├── types.ts                 # TypeScript type definitions
+└── App.tsx                  # Main application
 ```
 
 ---
 
-## 🔐 隐私电路详解
+## 🔐 Privacy Circuit Explained
 
-### **什么是隐私电路？**
+### **What is a Privacy Circuit?**
 
-隐私电路是一套数学约束系统，用于生成零知识证明（ZK Proof）。
+A privacy circuit is a system of mathematical constraints used to generate zero-knowledge proofs (ZK Proofs).
 
-**核心概念：**
+**Core Concepts:**
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  隐私电路 = 证明系统                                         │
+│  Privacy Circuit = Proof System                             │
 │                                                             │
-│  目标：证明"我知道某个秘密"，但不泄露秘密本身                │
+│  Goal: prove "I know a secret" without revealing the secret │
 │                                                             │
-│  例子：隐私转账                                              │
+│  Example: private transfer                                  │
 │  ┌───────────────────────────────────────────────────┐    │
-│  │ 我要证明：                                         │    │
-│  │ ✅ 我有一个 Note（价值 100 ATOS）                 │    │
-│  │ ✅ 这个 Note 在 Merkle Tree 里                    │    │
-│  │ ✅ 我有对应的 Spending Key                        │    │
-│  │ ✅ 我没有花过它（Nullifier 未使用）               │    │
+│  │ I want to prove:                                   │    │
+│  │ ✅ I have a Note (worth 100 ATOS)                 │    │
+│  │ ✅ This Note is in the Merkle Tree                │    │
+│  │ ✅ I have the corresponding Spending Key          │    │
+│  │ ✅ I haven't spent it (Nullifier unused)          │    │
 │  │                                                    │    │
-│  │ 但不告诉你：                                       │    │
-│  │ ❌ Note 的具体内容                                 │    │
-│  │ ❌ 我的 Spending Key                              │    │
-│  │ ❌ 我要给谁                                        │    │
-│  │ ❌ 金额是多少                                      │    │
+│  │ But without telling you:                           │    │
+│  │ ❌ The exact contents of the Note                  │    │
+│  │ ❌ My Spending Key                                 │    │
+│  │ ❌ Who I'm sending to                              │    │
+│  │ ❌ The amount                                      │    │
 │  └───────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### **电路的工作流程**
+### **Circuit Workflow**
 
 ```
-用户操作：发送 50 ATOS 给 Bob
+User action: send 50 ATOS to Bob
 
-Step 1: 准备输入（钱包本地）
+Step 1: Prepare inputs (locally in the wallet)
 ┌─────────────────────────────────────────┐
-│ 私有输入（Private Inputs）：             │
-│ • 我的 Note（金额、秘密、nullifier）     │
-│ • 我的 Spending Key                     │
+│ Private Inputs:                          │
+│ • My Note (amount, secret, nullifier)    │
+│ • My Spending Key                       │
 │ • Merkle Proof                          │
 │                                         │
-│ 公开输入（Public Inputs）：              │
+│ Public Inputs:                           │
 │ • Merkle Root                           │
 │ • Nullifier Hash                        │
-│ • 接收方公钥                             │
+│ • Recipient public key                   │
 └─────────────────────────────────────────┘
          ↓
-Step 2: 运行电路（Prover）
+Step 2: Run the circuit (Prover)
 ┌─────────────────────────────────────────┐
-│ 电路验证：                               │
-│ ✅ Note 在 Merkle Tree 里               │
-│ ✅ Spending Key 正确                    │
-│ ✅ 金额守恒                              │
-│ ✅ Nullifier 计算正确                   │
+│ Circuit verifies:                        │
+│ ✅ Note is in the Merkle Tree           │
+│ ✅ Spending Key is correct              │
+│ ✅ Amount is conserved                   │
+│ ✅ Nullifier computed correctly         │
 │                                         │
-│ 输出：ZK Proof（一串数字）               │
+│ Output: ZK Proof (a string of numbers)   │
 └─────────────────────────────────────────┘
          ↓
-Step 3: 提交到链上
+Step 3: Submit on-chain
 ┌─────────────────────────────────────────┐
-│ 提交：                                   │
+│ Submit:                                  │
 │ • ZK Proof                              │
 │ • Nullifier Hash                        │
-│ • 新 Merkle Root                        │
+│ • New Merkle Root                       │
 │                                         │
-│ 不提交：                                 │
-│ • Note 内容                             │
+│ Do not submit:                           │
+│ • Note contents                         │
 │ • Spending Key                          │
-│ • 金额、接收方                           │
+│ • Amount, recipient                      │
 └─────────────────────────────────────────┘
          ↓
-Step 4: 链上验证（Verifier 合约）
+Step 4: On-chain verification (Verifier contract)
 ┌─────────────────────────────────────────┐
-│ 合约验证：                               │
-│ ✅ Proof 有效？                         │
-│ ✅ Nullifier 未使用？                   │
-│ ✅ Merkle Root 正确？                   │
+│ Contract verifies:                       │
+│ ✅ Is the Proof valid?                  │
+│ ✅ Is the Nullifier unused?             │
+│ ✅ Is the Merkle Root correct?          │
 │                                         │
-│ 全部通过 → 交易成功                      │
+│ All pass → transaction succeeds          │
 └─────────────────────────────────────────┘
 ```
 
 ---
 
-## 🚀 两种 Prover 部署方案
+## 🚀 Two Prover Deployment Options
 
-### **方案 A：浏览器 WASM Prover（当前使用）**
+### **Option A: Browser WASM Prover (currently used)**
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│ 优点：                                                   │
-│ ✅ 无需额外服务器                                        │
-│ ✅ 用户隐私最大化（证明在本地生成）                      │
-│ ✅ 部署简单                                              │
+│ Pros:                                                    │
+│ ✅ No additional server required                         │
+│ ✅ Maximizes user privacy (proof generated locally)      │
+│ ✅ Simple to deploy                                      │
 │                                                          │
-│ 缺点：                                                   │
-│ ❌ 首次加载慢（下载 WASM，约 5-10MB）                    │
-│ ❌ 证明生成慢（浏览器性能限制，约 5-30 秒）              │
+│ Cons:                                                    │
+│ ❌ Slow first load (downloads WASM, around 5-10MB)       │
+│ ❌ Slow proof generation (browser performance limits, around 5-30 seconds) │
 │                                                          │
-│ 启动方式：                                               │
-│ • 不需要单独启动！                                       │
-│ • 前端加载时自动下载 WASM                                │
-│ • 用户点击"发送"时自动运行                               │
+│ How to start:                                            │
+│ • No separate startup needed!                            │
+│ • WASM downloaded automatically when the frontend loads  │
+│ • Runs automatically when the user clicks "Send"         │
 │                                                          │
-│ 适用场景：                                               │
-│ • 演示                                                   │
-│ • 低频交易                                               │
-│ • 注重隐私的用户                                         │
+│ Use cases:                                               │
+│ • Demos                                                  │
+│ • Low-frequency transactions                             │
+│ • Privacy-conscious users                                │
 └─────────────────────────────────────────────────────────┘
 ```
 
-### **方案 B：独立 Prover 服务（生产推荐）**
+### **Option B: Standalone Prover Service (recommended for production)**
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│ 优点：                                                   │
-│ ✅ 证明生成快（服务器性能强，约 1-5 秒）                 │
-│ ✅ 可以批量处理                                          │
-│ ✅ 支持递归证明                                          │
+│ Pros:                                                    │
+│ ✅ Fast proof generation (strong server performance, around 1-5 seconds) │
+│ ✅ Supports batch processing                             │
+│ ✅ Supports recursive proofs                             │
 │                                                          │
-│ 缺点：                                                   │
-│ ❌ 需要额外服务器                                        │
-│ ❌ 用户需要信任 Prover                                   │
+│ Cons:                                                    │
+│ ❌ Requires an additional server                         │
+│ ❌ Users must trust the Prover                           │
 │                                                          │
-│ 启动方式：                                               │
+│ How to start:                                            │
 │ cd ~/atoshi-privacy-circuits                            │
 │ npm run build:circuits                                  │
 │ npm run setup                                           │
 │ npm run start:prover                                    │
 │                                                          │
-│ 适用场景：                                               │
-│ • 生产环境                                               │
-│ • 高频交易                                               │
-│ • 需要快速响应                                           │
+│ Use cases:                                               │
+│ • Production environments                                │
+│ • High-frequency transactions                            │
+│ • When fast responses are required                       │
 └─────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## ✅ 当前完成状态
+## ✅ Current Completion Status
 
-### **已完成：**
+### **Completed:**
 
-- [x] SDK 封装（privacy-sdk.ts）
-  - [x] 密钥派生（基于 EIP-712 签名）
-  - [x] Shield（存款）
-  - [x] 隐私转账
-  - [x] Unshield（提款）
-  - [x] Note 管理
-  - [x] 本地存储
+- [x] SDK wrapper (privacy-sdk.ts)
+  - [x] Key derivation (based on EIP-712 signatures)
+  - [x] Shield (deposit)
+  - [x] Private transfer
+  - [x] Unshield (withdrawal)
+  - [x] Note management
+  - [x] Local storage
 
-- [x] WASM Prover 封装（wasm-prover.ts）
-  - [x] 证明生成接口
-  - [x] 本地验证
-  - [x] 模拟实现（演示用）
+- [x] WASM Prover wrapper (wasm-prover.ts)
+  - [x] Proof generation interface
+  - [x] Local verification
+  - [x] Mock implementation (for demos)
 
-- [x] React Hook（useWallet.ts）
-  - [x] 连接钱包
-  - [x] 初始化隐私密钥
-  - [x] 调用 SDK 方法
-  - [x] 演示模式支持
+- [x] React Hook (useWallet.ts)
+  - [x] Connect wallet
+  - [x] Initialize privacy keys
+  - [x] Call SDK methods
+  - [x] Demo mode support
 
-- [x] 配置文件
-  - [x] 环境变量配置
-  - [x] L2 RPC 配置
-  - [x] 合约地址配置
+- [x] Configuration files
+  - [x] Environment variable configuration
+  - [x] L2 RPC configuration
+  - [x] Contract address configuration
 
-### **待完成：**
+### **To Do:**
 
-- [ ] 前端组件接入 SDK
-  - [ ] 修改 SetupPrivacy.tsx（调用 initializePrivacy）
-  - [ ] 修改 ActionModal.tsx（调用 shield/privateSend/unshield）
-  - [ ] 添加加载状态和错误处理
+- [ ] Connect frontend components to the SDK
+  - [ ] Modify SetupPrivacy.tsx (call initializePrivacy)
+  - [ ] Modify ActionModal.tsx (call shield/privateSend/unshield)
+  - [ ] Add loading states and error handling
 
-- [ ] 真实电路集成
-  - [ ] 编译 Circom 电路
-  - [ ] 生成 WASM 文件
-  - [ ] 替换模拟 Prover
+- [ ] Real circuit integration
+  - [ ] Compile the Circom circuit
+  - [ ] Generate the WASM file
+  - [ ] Replace the mock Prover
 
-- [ ] 合约部署
-  - [ ] 部署 Shield 合约
-  - [ ] 部署 Verifier 合约
-  - [ ] 更新配置文件
+- [ ] Contract deployment
+  - [ ] Deploy the Shield contract
+  - [ ] Deploy the Verifier contract
+  - [ ] Update the configuration files
 
 ---
 
-## 🎯 下一步行动
+## 🎯 Next Steps
 
-### **今天可以做的：**
+### **What you can do today:**
 
-1. **测试前端（演示模式）**
+1. **Test the frontend (demo mode)**
    ```bash
    cd ~/shield
    npm install
    npm run dev
    ```
-   访问 http://localhost:5173
+   Visit http://localhost:5173
 
-2. **测试密钥派生**
-   - 连接 MetaMask
-   - 切换到"隐私资产"
-   - 点击"激活隐私"
-   - 查看派生的密钥
+2. **Test key derivation**
+   - Connect MetaMask
+   - Switch to "Private Assets"
+   - Click "Activate Privacy"
+   - View the derived keys
 
-3. **测试 UI 流程**
-   - Shield（存款）
-   - 隐私转账
-   - Unshield（提款）
-   - 查看交易历史
+3. **Test the UI flow**
+   - Shield (deposit)
+   - Private transfer
+   - Unshield (withdrawal)
+   - View transaction history
 
-### **明天运维开端口后：**
+### **Tomorrow, after ops opens the port:**
 
-1. **部署合约**
+1. **Deploy the contracts**
    ```bash
    cd ~/atoshi-privacy-contracts
    npx hardhat run scripts/deploy-shield.ts --network l2
    ```
 
-2. **更新配置**
+2. **Update the configuration**
    ```bash
-   # 在 .env.local 中填入合约地址
+   # Fill in the contract address in .env.local
    VITE_SHIELD_CONTRACT=0x...
    VITE_DEMO_MODE=false
    ```
 
-3. **真实测试**
-   - 连接到 L2
-   - 发起真实交易
-   - 查看链上数据
+3. **Real testing**
+   - Connect to L2
+   - Initiate a real transaction
+   - Inspect the on-chain data
 
 ---
 
-## 💡 关键问题解答
+## 💡 Key Q&A
 
-### **Q1: 电路需要单独启动吗？**
+### **Q1: Does the circuit need to be started separately?**
 
-**A:** 看方案：
-- **WASM Prover（当前）**：不需要！前端自动加载
-- **独立 Prover 服务**：需要！在服务器上启动
+**A:** It depends on the option:
+- **WASM Prover (current)**: No! The frontend loads it automatically
+- **Standalone Prover Service**: Yes! Start it on the server
 
-### **Q2: SDK 封装好了吗？**
+### **Q2: Is the SDK wrapper complete?**
 
-**A:** 是的！包括：
-- ✅ 密钥派生
-- ✅ 所有交易类型
-- ✅ Note 管理
-- ✅ 演示模式
+**A:** Yes! It includes:
+- ✅ Key derivation
+- ✅ All transaction types
+- ✅ Note management
+- ✅ Demo mode
 
-### **Q3: 现在可以演示吗？**
+### **Q3: Can it be demoed now?**
 
-**A:** 可以！演示模式下：
-- ✅ 所有 UI 交互正常
-- ✅ 密钥派生真实运行
-- ✅ 交易流程完整展示
-- ❌ 不会真正调用合约（等合约部署）
+**A:** Yes! In demo mode:
+- ✅ All UI interactions work
+- ✅ Key derivation runs for real
+- ✅ The transaction flow is fully demonstrated
+- ❌ It won't actually call the contracts (pending contract deployment)
 
-### **Q4: 隐私电路是什么？**
+### **Q4: What is a privacy circuit?**
 
 **A:** 
-- 一套数学规则（约束系统）
-- 用于生成零知识证明
-- 证明"我知道秘密"但不泄露秘密
-- 在 Prover 中运行（浏览器或服务器）
+- A set of mathematical rules (a constraint system)
+- Used to generate zero-knowledge proofs
+- Proves "I know a secret" without revealing the secret
+- Runs in a Prover (browser or server)
 
 ---
 
-## 📞 需要帮助？
+## 📞 Need Help?
 
-如果遇到问题：
-1. 检查配置：`cat .env.local`
-2. 查看日志：浏览器控制台
-3. 测试 RPC：`curl http://54.169.30.130:8123`
+If you run into issues:
+1. Check the configuration: `cat .env.local`
+2. Check the logs: the browser console
+3. Test the RPC: `curl http://54.169.30.130:8123`
 
-**现在可以启动前端测试了！** 🚀
-
+**You can start testing the frontend now!** 🚀

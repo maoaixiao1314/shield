@@ -38,7 +38,7 @@ export interface WalletState {
   privacyKeys: PrivacyKeys;
 }
 
-// Note 结构（隐私交易的核心）
+// Note structure (the core of privacy transactions)
 export interface Note {
   amount: bigint;
   secret: string;

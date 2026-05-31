@@ -30,7 +30,7 @@ const ActionModal: React.FC<ActionModalProps> = ({ isOpen, onClose, type, active
   };
 
   const handleConfirm = async () => {
-    // Shield 不需要 to (存进自己池子,业务层会用自己的 publicAddress)
+    // Shield does not need a "to" (it deposits into your own pool; the business layer uses your own publicAddress)
     if (!amount) return;
     if (type !== TransactionType.SHIELD && !to) return;
     setIsProcessing(true);
@@ -84,11 +84,11 @@ const ActionModal: React.FC<ActionModalProps> = ({ isOpen, onClose, type, active
             </div>
           </div>
 
-          {/* Shield 类型: 钱存进自己的隐私池, 不需要 recipient 输入框 */}
+          {/* Shield type: funds are deposited into your own privacy pool, so no recipient input is needed */}
           {type === TransactionType.SHIELD ? (
             <div className={`p-3 rounded-2xl border ${isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-400' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
-              <span className="text-[10px] font-bold uppercase tracking-widest opacity-60">存入到</span>
-              <p className="mt-1 text-xs">您自己的隐私池 (无需填写接收地址)</p>
+              <span className="text-[10px] font-bold uppercase tracking-widest opacity-60">Deposit to</span>
+              <p className="mt-1 text-xs">Your own privacy pool (no recipient address required)</p>
             </div>
           ) : (
             <div>
@@ -101,17 +101,17 @@ const ActionModal: React.FC<ActionModalProps> = ({ isOpen, onClose, type, active
                   onChange={(e) => setTo(e.target.value)}
                   placeholder={
                     type === TransactionType.PRIVATE_SEND
-                      ? '粘贴对方收款码 或 点右侧扫码 →'
+                      ? "Paste the recipient's receiving code or tap scan on the right →"
                       : (isDark ? 'zk_atos_...' : '0x...')
                   }
                   className="w-full bg-transparent p-4 pr-14 text-xs font-medium mono outline-none"
                 />
-                {/* 扫码按钮 — 只在隐私转账时出现 */}
+                {/* Scan button — only appears during privacy transfers */}
                 {type === TransactionType.PRIVATE_SEND && (
                   <button
                     onClick={() => setShowScanner(true)}
                     className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-colors"
-                    title="扫描对方二维码"
+                    title="Scan the recipient's QR code"
                     type="button"
                   >
                     <QrCode size={18} />
@@ -121,7 +121,7 @@ const ActionModal: React.FC<ActionModalProps> = ({ isOpen, onClose, type, active
             </div>
           )}
 
-          {/* 隐私转账时弹层扫码器 */}
+          {/* Overlay scanner shown during privacy transfers */}
           {showScanner && (
             <QRCodeScanner
               onScan={(text) => {

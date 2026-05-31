@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-// @ts-ignore - html5-qrcode 无 type
+// @ts-ignore - html5-qrcode has no types
 import { Html5Qrcode } from 'html5-qrcode';
 
 interface Props {
@@ -8,7 +8,7 @@ interface Props {
   onClose: () => void;
 }
 
-/** 弹层式二维码扫描器 (Alice 转账时扫 Bob 收款码用) */
+/** Overlay-style QR code scanner (used by Alice to scan Bob's receiving code when transferring) */
 const QRCodeScanner: React.FC<Props> = ({ onScan, onError, onClose }) => {
   const containerId = 'qr-scanner-container';
   const scannerRef = useRef<any>(null);
@@ -21,15 +21,15 @@ const QRCodeScanner: React.FC<Props> = ({ onScan, onError, onClose }) => {
 
     html5QrCode
       .start(
-        { facingMode: 'environment' }, // 后置摄像头
+        { facingMode: 'environment' }, // rear camera
         { fps: 10, qrbox: 250 },
         (decodedText: string) => {
-          // 成功识别一次就停
+          // stop after a single successful scan
           html5QrCode.stop().catch(() => {});
           onScan(decodedText);
         },
         () => {
-          // 每帧识别失败的回调,正常情况会一直触发,不处理
+          // callback for per-frame scan failures; fires constantly under normal conditions, so it is ignored
         }
       )
       .then(() => setStatus('scanning'))
@@ -52,7 +52,7 @@ const QRCodeScanner: React.FC<Props> = ({ onScan, onError, onClose }) => {
     <div className="fixed inset-0 z-[200] bg-black/90 flex items-center justify-center p-4">
       <div className="bg-zinc-900 border border-zinc-700 rounded-2xl p-5 max-w-sm w-full">
         <div className="flex justify-between items-center mb-3">
-          <h3 className="text-zinc-200 font-bold">扫描 Bob 的隐私收款码</h3>
+          <h3 className="text-zinc-200 font-bold">Scan Bob's Privacy Receiving Code</h3>
           <button
             onClick={() => {
               try { scannerRef.current?.stop().catch(() => {}); } catch {}
@@ -65,20 +65,20 @@ const QRCodeScanner: React.FC<Props> = ({ onScan, onError, onClose }) => {
         </div>
 
         {status === 'init' && (
-          <p className="text-zinc-500 text-xs">正在请求摄像头权限...</p>
+          <p className="text-zinc-500 text-xs">Requesting camera permission...</p>
         )}
         {status === 'error' && (
           <div className="text-red-400 text-xs">
-            <p>无法启动摄像头:</p>
+            <p>Unable to start camera:</p>
             <p className="mt-1">{errMsg}</p>
-            <p className="mt-2 text-zinc-500">提示: 浏览器必须 https / localhost, 否则不给权限</p>
+            <p className="mt-2 text-zinc-500">Tip: the browser must be on https / localhost, otherwise permission is denied</p>
           </div>
         )}
 
         <div id={containerId} className="rounded-lg overflow-hidden bg-black" />
 
         {status === 'scanning' && (
-          <p className="mt-3 text-zinc-500 text-xs text-center">把摄像头对准 Bob 的二维码</p>
+          <p className="mt-3 text-zinc-500 text-xs text-center">Point the camera at Bob's QR code</p>
         )}
       </div>
     </div>

@@ -1,4 +1,4 @@
-// circomlibjs 没有官方 type, 运行时是 JS, 这里声明成 any.
+// circomlibjs has no official types and is JS at runtime, so it is declared as any here.
 declare module 'circomlibjs' {
   export function buildPoseidon(): Promise<any>;
   export const poseidonContract: any;

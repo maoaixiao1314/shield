@@ -16,7 +16,7 @@ const SetupPrivacy: React.FC<SetupPrivacyProps> = ({ wallet, onInitialize }) => 
     try {
       setStep('signing');
       
-      // 调用真正的 SDK 初始化
+      // Call the actual SDK initialization
       await onInitialize();
       
       setStep('deriving');
@@ -27,8 +27,8 @@ const SetupPrivacy: React.FC<SetupPrivacyProps> = ({ wallet, onInitialize }) => 
 
       setStep('success');
     } catch (error) {
-      console.error('密钥派生失败:', error);
-      alert(`初始化失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      console.error('Key derivation failed:', error);
+      alert(`Initialization failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setStep('start');
       setProgress(0);
     }

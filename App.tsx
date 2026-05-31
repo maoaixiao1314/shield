@@ -32,6 +32,8 @@ const App: React.FC = () => {
     unshield,
     transfer,
     recoverNotesFromChain,
+    localNotes,                  // ⭐ New: local Note list (for UI rendering)
+    refreshPrivateState,         // ⭐ New: call after any Note change to refresh the UI
   } = useWallet();
 
   const [isRecovering, setIsRecovering] = useState(false);
@@ -39,33 +41,33 @@ const App: React.FC = () => {
   const handleRecoverNotes = async () => {
     if (!ensureConnectedAndOnL2()) return;
     if (!wallet.privacyKeys?.isInitialized) {
-      alert('请先初始化隐私身份(点 "Setup Privacy")');
+      alert('Please initialize your privacy identity first (click "Setup Privacy")');
       return;
     }
     setIsRecovering(true);
     try {
       const recovered = await recoverNotesFromChain();
-      alert(`扫描完成,恢复了 ${recovered.length} 笔 Note`);
+      alert(`Scan complete, recovered ${recovered.length} Note(s)`);
     } catch (e: any) {
-      console.error('恢复失败:', e);
-      alert('恢复失败: ' + (e?.message || e));
+      console.error('Recovery failed:', e);
+      alert('Recovery failed: ' + (e?.message || e));
     } finally {
       setIsRecovering(false);
     }
   };
 
-  // 通用前置检查: 已连接 + 在 Atoshi L2 链上. 返回 false 表示不通过(已弹提示)
+  // General precondition check: connected + on the Atoshi L2 chain. Returns false if it fails (a prompt has already been shown)
   const ensureConnectedAndOnL2 = (): boolean => {
     if (!isConnected) {
-      alert('请先连接钱包！');
+      alert('Please connect your wallet first!');
       return false;
     }
     if (!isOnAtoshiL2) {
       const ok = window.confirm(
-        `您当前钱包不在 Atoshi L2 链上 (current chain: ${currentChainId})。\n\n` +
-        `Atoshi 隐私交易只在 L2 (chain ${atoshiL2.id}) 上运行。\n` +
-        `是否切换到 Atoshi L2?\n\n` +
-        `(如果 MetaMask 提示"未知网络",请同意添加并切换)`
+        `Your wallet is not currently on the Atoshi L2 chain (current chain: ${currentChainId}).\n\n` +
+        `Atoshi privacy transactions only run on L2 (chain ${atoshiL2.id}).\n` +
+        `Switch to Atoshi L2?\n\n` +
+        `(If MetaMask shows "Unknown network", please approve adding and switching)`
       );
       if (ok && switchChain) {
         switchChain({ chainId: atoshiL2.id });
@@ -90,10 +92,10 @@ const App: React.FC = () => {
     if (!ensureConnectedAndOnL2()) return;
     try {
       await initializePrivacy();
-      alert('隐私密钥初始化成功！');
+      alert('Privacy keys initialized successfully!');
     } catch (error) {
-      console.error('初始化失败:', error);
-      alert('初始化失败，请重试: ' + (error as any)?.message);
+      console.error('Initialization failed:', error);
+      alert('Initialization failed, please try again: ' + (error as any)?.message);
     }
   };
 
@@ -115,36 +117,36 @@ const App: React.FC = () => {
           tx = await privateSend(amount, to);
           break;
         default:
-          throw new Error('未知操作类型');
+          throw new Error('Unknown action type');
       }
 
       setTransactions([tx, ...transactions]);
       closeModal();
-      alert('交易成功！');
+      alert('Transaction successful!');
     } catch (error) {
-      console.error('交易失败:', error);
-      alert(`交易失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      console.error('Transaction failed:', error);
+      alert(`Transaction failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
-  // 如果没有连接钱包，显示连接按钮
+  // If no wallet is connected, show the connect button
   if (!isConnected) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-3xl font-bold mb-4">Atoshi Privacy Wallet</h1>
-          <p className="text-slate-600 mb-8">连接钱包开始使用隐私功能</p>
+          <p className="text-slate-600 mb-8">Connect your wallet to start using privacy features</p>
           <ConnectButton />
         </div>
       </div>
     );
   }
 
-  // 构建 wallet 对象
+  // Build the wallet object
   const walletState = {
     ...wallet,
     address: address || '',
-    // 强制显示 ATOSHI(不信钱包返回的 symbol — MetaMask 等会用户自定义链时存了不准的 symbol)
+    // Force-display ATOSHI (don't trust the symbol returned by the wallet — MetaMask and others store an inaccurate symbol for user-defined chains)
     publicBalance: balance ? `${parseFloat(balance.formatted).toFixed(4)} ATOSHI` : '0 ATOSHI'
   };
 
@@ -156,23 +158,23 @@ const App: React.FC = () => {
 
         <Header wallet={walletState} activeAsset={activeAsset} />
 
-        {/* 全局警告 banner: 连了钱包但不在 Atoshi L2 链上, 一直显示直到切链 */}
+        {/* Global warning banner: wallet connected but not on the Atoshi L2 chain, shown continuously until the chain is switched */}
         {isConnected && !isOnAtoshiL2 && (
           <div className="mx-4 mt-2 z-10 bg-amber-500/10 border border-amber-500/40 rounded-xl p-3 text-xs">
-            <p className="font-bold text-amber-400">⚠️ 当前不在 Atoshi L2 链上</p>
+            <p className="font-bold text-amber-400">⚠️ Not currently on the Atoshi L2 chain</p>
             <p className="text-amber-200/80 mt-1">
-              当前 chain: {currentChainId} → 需要切换到 Atoshi L2 (chain {atoshiL2.id})
+              Current chain: {currentChainId} → need to switch to Atoshi L2 (chain {atoshiL2.id})
             </p>
             <p className="text-amber-200/60 mt-2 text-[10px]">
-              💡 如果 MetaMask 没有添加过 Atoshi L2,点下面按钮会自动添加.
+              💡 If MetaMask has never added Atoshi L2, clicking the button below will add it automatically.
             </p>
             <div className="mt-2 flex gap-2">
               <button
                 onClick={async () => {
-                  // 用 wallet_addEthereumChain 强制添加并切链
-                  // 这个比 useSwitchChain 更可靠:
-                  //   useSwitchChain 在链不存在时会失败,而这个会先添加再切
-                  if (!(window as any).ethereum) return alert('未检测到钱包扩展');
+                  // Use wallet_addEthereumChain to force-add and switch the chain
+                  // This is more reliable than useSwitchChain:
+                  //   useSwitchChain fails when the chain doesn't exist, whereas this adds it first and then switches
+                  if (!(window as any).ethereum) return alert('No wallet extension detected');
                   try {
                     await (window as any).ethereum.request({
                       method: 'wallet_addEthereumChain',
@@ -185,19 +187,19 @@ const App: React.FC = () => {
                       }],
                     });
                   } catch (e: any) {
-                    alert('添加失败: ' + (e?.message || e));
+                    alert('Failed to add: ' + (e?.message || e));
                   }
                 }}
                 className="flex-1 px-3 py-2 rounded-lg bg-amber-500 text-zinc-900 text-[10px] font-bold uppercase tracking-widest hover:bg-amber-400"
               >
-                ➕ 添加并切换到 Atoshi L2
+                ➕ Add and switch to Atoshi L2
               </button>
               <button
                 onClick={() => switchChain && switchChain({ chainId: atoshiL2.id })}
                 className="px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-300 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-700"
-                title="仅切换 (链已添加过用这个)"
+                title="Switch only (use this if the chain has already been added)"
               >
-                切换
+                Switch
               </button>
             </div>
           </div>
@@ -218,19 +220,20 @@ const App: React.FC = () => {
                 <SetupPrivacy wallet={walletState} onInitialize={handleInitializePrivacy} />
               ) : (
                 <>
-                  {/* 跨设备恢复入口: 从链上扫所有 Deposit 事件,用 viewingKey 解密属于本人的 Note */}
+                  {/* Cross-device recovery entry point: scan all Deposit events on chain and use the viewingKey to decrypt Notes belonging to the user */}
                   <div className="mb-4 flex justify-center">
                     <button
                       onClick={handleRecoverNotes}
                       disabled={isRecovering}
                       className="px-4 py-2 text-xs font-bold uppercase tracking-widest rounded-full bg-zinc-900 border border-zinc-700 text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
                     >
-                      {isRecovering ? '⏳ 扫描链上 Note...' : '🔄 从链上恢复 Note'}
+                      {isRecovering ? '⏳ Scanning Notes on chain...' : '🔄 Recover Notes from chain'}
                     </button>
                   </div>
                   <PrivateDashboard
                     wallet={walletState}
                     transactions={transactions.filter(t => [TransactionType.PRIVATE_SEND, TransactionType.SHIELD, TransactionType.UNSHIELD].includes(t.type))}
+                    notes={localNotes}
                     onAction={handleAction}
                   />
                 </>

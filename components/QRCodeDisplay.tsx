@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-// @ts-ignore - qrcode 库无 type
+// @ts-ignore - qrcode library has no types
 import QRCode from 'qrcode';
 
 interface Props {
@@ -7,7 +7,7 @@ interface Props {
   size?: number;
 }
 
-/** 把任意字符串渲染成二维码 (canvas). 给 Bob 展示自己收款码用. */
+/** Render an arbitrary string into a QR code (canvas). Used to show Bob his own receiving code. */
 const QRCodeDisplay: React.FC<Props> = ({ data, size = 200 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -20,7 +20,7 @@ const QRCodeDisplay: React.FC<Props> = ({ data, size = 200 }) => {
       {
         width: size,
         margin: 2,
-        color: { dark: '#a78bfa', light: '#0a0a0a' }, // 紫色 on 黑
+        color: { dark: '#a78bfa', light: '#0a0a0a' }, // purple on black
         errorCorrectionLevel: 'M',
       },
       (e: any) => {
@@ -29,7 +29,7 @@ const QRCodeDisplay: React.FC<Props> = ({ data, size = 200 }) => {
     );
   }, [data, size]);
 
-  if (err) return <div className="text-red-400 text-xs">QR 生成失败: {err}</div>;
+  if (err) return <div className="text-red-400 text-xs">QR generation failed: {err}</div>;
   return <canvas ref={canvasRef} className="rounded-lg" />;
 };
 

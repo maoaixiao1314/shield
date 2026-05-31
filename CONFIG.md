@@ -1,81 +1,81 @@
-# Atoshi Privacy Wallet - 配置指南
+# Atoshi Privacy Wallet - Configuration Guide
 
-## 环境变量配置
+## Environment Variable Configuration
 
-在项目根目录创建 `.env.local` 文件：
+Create a `.env.local` file in the project root directory:
 
 ```bash
-# L2 RPC 配置
+# L2 RPC configuration
 VITE_L2_RPC_URL=http://54.169.30.130:8123
 VITE_L2_CHAIN_ID=67890
 
-# 合约地址（部署后填入）
+# Contract addresses (fill in after deployment)
 VITE_SHIELD_CONTRACT=0x0000000000000000000000000000000000000000
 VITE_VERIFIER_CONTRACT=0x0000000000000000000000000000000000000000
 
-# Prover 配置
+# Prover configuration
 VITE_PROVER_URL=http://localhost:8080
 VITE_USE_WASM_PROVER=true
 
-# 演示模式（合约未部署时使用模拟数据）
+# Demo mode (uses mock data when the contract is not deployed)
 VITE_DEMO_MODE=true
 ```
 
-## 启动步骤
+## Getting Started
 
-### 1. 安装依赖
+### 1. Install dependencies
 
 ```bash
 npm install
 ```
 
-### 2. 配置环境变量
+### 2. Configure environment variables
 
-复制上面的配置到 `.env.local` 文件
+Copy the configuration above into the `.env.local` file
 
-### 3. 启动开发服务器
+### 3. Start the development server
 
 ```bash
 npm run dev
 ```
 
-访问 http://localhost:5173
+Visit http://localhost:5173
 
-## 演示模式说明
+## Demo Mode Notes
 
-当 `VITE_DEMO_MODE=true` 时：
-- ✅ 可以测试所有 UI 交互
-- ✅ 可以测试密钥派生
-- ✅ 使用模拟的交易数据
-- ❌ 不会真正调用合约
+When `VITE_DEMO_MODE=true`:
+- ✅ You can test all UI interactions
+- ✅ You can test key derivation
+- ✅ Uses mock transaction data
+- ❌ Will not actually call the contract
 
-当合约部署完成后：
-1. 更新 `VITE_SHIELD_CONTRACT` 地址
-2. 设置 `VITE_DEMO_MODE=false`
-3. 重启开发服务器
+After the contract is deployed:
+1. Update the `VITE_SHIELD_CONTRACT` address
+2. Set `VITE_DEMO_MODE=false`
+3. Restart the development server
 
-## 连接 MetaMask
+## Connecting MetaMask
 
-1. 打开 MetaMask
-2. 添加自定义网络：
-   - 网络名称：Atoshi L2
-   - RPC URL：http://54.169.30.130:8123
-   - Chain ID：67890
-   - 货币符号：ETH
-3. 刷新页面，点击"连接钱包"
+1. Open MetaMask
+2. Add a custom network:
+   - Network name: Atoshi L2
+   - RPC URL: http://54.169.30.130:8123
+   - Chain ID: 67890
+   - Currency symbol: ETH
+3. Refresh the page and click "Connect Wallet"
 
-## 功能测试清单
+## Feature Testing Checklist
 
-### ✅ 当前可测试（演示模式）
-- [x] 连接钱包
-- [x] 查看公共余额
-- [x] 隐私密钥派生
-- [x] UI 交互流程
-- [x] 交易历史展示
+### ✅ Currently testable (demo mode)
+- [x] Connect wallet
+- [x] View public balance
+- [x] Privacy key derivation
+- [x] UI interaction flow
+- [x] Transaction history display
 
-### ⏳ 等待合约部署
-- [ ] Shield（存款）
-- [ ] 隐私转账
-- [ ] Unshield（提款）
-- [ ] 链上数据查询
+### ⏳ Awaiting contract deployment
+- [ ] Shield (deposit)
+- [ ] Private transfer
+- [ ] Unshield (withdrawal)
+- [ ] On-chain data queries
 

@@ -12,9 +12,9 @@ export default defineConfig(({ mode }) => {
       },
       plugins: [
         react(),
-        // 注入 Node.js 全局变量 (Buffer / process / global) 到浏览器.
-        // 必须的: snarkjs / circomlibjs / blake-hash 等 crypto 库假设 Node 环境.
-        // 不加这个: "Buffer is not defined" 整页崩溃.
+        // Inject Node.js globals (Buffer / process / global) into the browser.
+        // Required: crypto libraries like snarkjs / circomlibjs / blake-hash assume a Node environment.
+        // Without this: "Buffer is not defined" crashes the whole page.
         nodePolyfills({
           globals: { Buffer: true, global: true, process: true },
           protocolImports: true,

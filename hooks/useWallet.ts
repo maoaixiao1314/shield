@@ -1,5 +1,5 @@
 /**
- * 钱包 Hook - 封装 SDK 调用
+ * Wallet Hook - wraps SDK calls
  */
 
 import { useState, useEffect } from 'react';
@@ -20,8 +20,8 @@ import {
 import { sha256 } from '@noble/hashes/sha2.js';
 import { hkdf } from '@noble/hashes/hkdf.js';
 
-// 跟 @atoshi/privacy-sdk 严格一致的 EIP-712 typed-data (固定, 不带 timestamp)
-// 这样同一个 EOA 签出来的 signature 永远一样, 派生的 keys 跨设备/会话一致.
+// EIP-712 typed-data kept strictly in sync with @atoshi/privacy-sdk (fixed, no timestamp)
+// This way the signature produced by the same EOA is always identical, and the derived keys stay consistent across devices/sessions.
 const ATOSHI_TYPED_DATA = {
   domain: { name: 'Atoshi Privacy', version: '1' },
   types: {
@@ -39,14 +39,14 @@ const ATOSHI_TYPED_DATA = {
   },
 };
 
-// signature → seed (与 SDK 一致)
+// signature → seed (consistent with the SDK)
 function _seedFromSignature(signatureHex: string): Uint8Array {
   const sigBytes = ethers.getBytes(signatureHex);
   if (sigBytes.length !== 65) throw new Error('signature must be 65 bytes');
   return ethers.getBytes(ethers.keccak256(sigBytes));
 }
 
-// HKDF-SHA256 派生 3 个 key, info 跟 SDK 字串严格一致
+// HKDF-SHA256 derives 3 keys; the info strings are kept strictly identical to the SDK
 function _deriveKeysFromSeed(seed: Uint8Array) {
   const enc = new TextEncoder();
   const sp = hkdf(sha256, seed, undefined, enc.encode('atoshi-privacy-v1:spending'), 32);
@@ -64,7 +64,7 @@ import {
   prepareAndProveTransfer,
 } from '../sdk/zk-prover';
 
-// 本地辅助:Uint8Array → 0x hex (SDK 不导出这个,自己写一行)
+// Local helper: Uint8Array → 0x hex (the SDK doesn't export this, so write a one-liner)
 const bytesToHex = (b: Uint8Array): string => {
   let s = '0x';
   for (const x of b) s += x.toString(16).padStart(2, '0');
@@ -74,7 +74,7 @@ import { WalletState, Transaction, TransactionType, PrivacyKeys } from '../types
 import config from '../config';
 import { atoshiL2 } from '../wagmi.config';
 
-// 创建一个模拟的 Signer，使用 Wagmi 的 signTypedData
+// Create a mock Signer that uses Wagmi's signTypedData
 class WagmiSigner {
   private address: string;
   private signTypedDataFn: any;
@@ -120,25 +120,48 @@ export function useWallet() {
   const [signer, setSigner] = useState<ethers.Signer | null>(null);
   const [sdk] = useState(() => getPrivacySDK(config.l2.rpcUrl, config.contracts.shield));
 
-  // 当 walletClient 变化时，更新 provider 和 signer
+  // Local Note state (mirrors localStorage's privacy_notes)
+  // The UI reads this directly; refreshed after any shield/transfer/unshield/recover operation.
+  const [localNotes, setLocalNotes] = useState<any[]>([]);
+
+  // Recompute privateBalance + refresh localNotes state (called after any Note state change)
+  const refreshPrivateState = () => {
+    const notes = loadNotes();
+    setLocalNotes(notes);
+    const total = notes
+      .filter((n: any) => !n.spent)
+      .reduce((sum: bigint, n: any) => sum + BigInt(n.amount), 0n);
+    setWallet(prev => ({
+      ...prev,
+      privateBalance: `${ethers.formatEther(total)} ATOSHI`,
+    }));
+  };
+
+  // On startup + when walletClient changes, load Notes from localStorage to render the UI
+  useEffect(() => {
+    refreshPrivateState();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [walletClient]);
+
+  // When walletClient changes, update provider and signer
   useEffect(() => {
     const initProvider = async () => {
       if (walletClient && window.ethereum) {
-        console.log('初始化 provider 和 signer...');
+        console.log('Initializing provider and signer...');
         const provider = new ethers.BrowserProvider(window.ethereum);
         const signer = await provider.getSigner();
-        console.log('Signer 初始化成功:', await signer.getAddress());
+        console.log('Signer initialized successfully:', await signer.getAddress());
         setProvider(provider);
         setSigner(signer);
         
-        // 尝试加载已保存的隐私密钥
+        // Try to load previously saved privacy keys
         const savedKeys = localStorage.getItem('privacy_keys');
         if (savedKeys) {
           const keys = JSON.parse(savedKeys);
           setWallet(prev => ({ ...prev, privacyKeys: keys }));
-          // 同时设置到 SDK 中
+          // Also set them into the SDK
           sdk.setPrivacyKeys(keys);
-          console.log('已将保存的密钥设置到 SDK');
+          console.log('Saved keys have been set into the SDK');
         }
       }
     };
@@ -146,19 +169,19 @@ export function useWallet() {
     initProvider();
   }, [walletClient, sdk]);
 
-  // 初始化隐私密钥
+  // Initialize privacy keys
   const initializePrivacy = async (): Promise<PrivacyKeys> => {
-    console.log('initializePrivacy 被调用');
-    
+    console.log('initializePrivacy called');
+
     if (!walletClient) {
-      throw new Error('请先连接钱包,并切换到 Atoshi L2 链 (chain 67890)');
+      throw new Error('Please connect your wallet first and switch to the Atoshi L2 chain (chain 67890)');
     }
 
     try {
       // ============================================================
-      // ⭐ 关键: 用 @atoshi/privacy-sdk 的固定 EIP-712 typed-data 签名
-      //   (旧 SDK 的 deriveKeys 用 timestamp 派生, 每次签名 keys 都不同 → 资金锁死)
-      //   现在用 SDK 标准方法: 固定 typed-data + HKDF, 同一 EOA 始终得到同样 keys.
+      // ⭐ Key point: sign with @atoshi/privacy-sdk's fixed EIP-712 typed-data
+      //   (the old SDK's deriveKeys derived using a timestamp, so the keys differed on every signature → funds locked up)
+      //   Now we use the SDK standard approach: fixed typed-data + HKDF, so the same EOA always gets the same keys.
       // ============================================================
       const signature = await signTypedDataAsync({
         domain: ATOSHI_TYPED_DATA.domain,
@@ -171,7 +194,7 @@ export function useWallet() {
       const seed = _seedFromSignature(signature);
       const derivedKeys = _deriveKeysFromSeed(seed);
 
-      // 转成 shield 项目 UI 用的 PrivacyKeys 格式 (兼容旧字段名)
+      // Convert to the PrivacyKeys format used by the shield project UI (compatible with old field names)
       const spendingKey = derivedKeys.spendingKey.toString();
       const viewingKey = derivedKeys.viewingKey.toString();
       const ownerPubkey = await deriveOwnerPubkey(derivedKeys.spendingKey);
@@ -179,11 +202,11 @@ export function useWallet() {
       const keys = {
         spendingKey,
         viewingKey,
-        publicAddress: '0x' + ownerPubkey.toString(16).padStart(40, '0').slice(0, 40),  // 截 40 字符显示用
+        publicAddress: '0x' + ownerPubkey.toString(16).padStart(40, '0').slice(0, 40),  // truncated to 40 chars for display
         isInitialized: true,
       };
 
-      // 生成"我的隐私收款码"
+      // Generate "my privacy receiving code"
       try {
         const viewPub = viewingPubKey(derivedKeys.viewingKey);
         (keys as any).receivingCode = JSON.stringify({
@@ -192,22 +215,22 @@ export function useWallet() {
         });
         console.log('[receivingCode]', (keys as any).receivingCode);
       } catch (e) {
-        console.warn('生成 receivingCode 失败:', e);
+        console.warn('Failed to generate receivingCode:', e);
       }
 
-      // 保存到本地
+      // Save locally
       localStorage.setItem('privacy_keys', JSON.stringify(keys));
       setWallet(prev => ({ ...prev, privacyKeys: keys }));
       sdk.setPrivacyKeys(keys);
-      console.log('[initializePrivacy] keys derived (固定 EIP-712, 跨设备/会话一致)');
+      console.log('[initializePrivacy] keys derived (fixed EIP-712, consistent across devices/sessions)');
       return keys;
     } catch (error) {
-      console.error('初始化隐私密钥失败:', error);
+      console.error('Failed to initialize privacy keys:', error);
       throw error;
     }
   };
 
-  // 更新隐私余额
+  // Update private balance
   const updatePrivateBalance = async () => {
     try {
       const balance = await sdk.getPrivateBalance();
@@ -216,19 +239,19 @@ export function useWallet() {
         privateBalance: `${ethers.formatEther(balance)} ATOSHI`
       }));
     } catch (error) {
-      console.error('更新隐私余额失败:', error);
+      console.error('Failed to update private balance:', error);
     }
   };
 
-  // Shield（存款）
+  // Shield (deposit)
   const shield = async (amount: string): Promise<Transaction> => {
     if (!walletClient) {
-      throw new Error('请先连接钱包,并切换到 Atoshi L2 链 (chain 67890)');
+      throw new Error('Please connect your wallet first and switch to the Atoshi L2 chain (chain 67890)');
     }
 
     try {
-      // 1. 用真实 Poseidon + ECIES 构造 Note + 加密
-      //    需要 spendingKey / viewingKey: 从 wallet.privacyKeys 里恢复
+      // 1. Construct the Note with real Poseidon + ECIES and encrypt it
+      //    Requires spendingKey / viewingKey: recovered from wallet.privacyKeys
       const spendingKey = BigInt(wallet.privacyKeys.spendingKey);
       const viewingKey = BigInt(wallet.privacyKeys.viewingKey);
 
@@ -240,7 +263,7 @@ export function useWallet() {
       const ownerPubkey = await deriveOwnerPubkey(spendingKey);
       const commitment = await atoshiComputeCommitment(amountWei, tokenId, ownerPubkey, blinding);
 
-      // 加密 Note 给自己 (跨设备恢复时用 viewingKey 扫回来)
+      // Encrypt the Note to yourself (so cross-device recovery can scan it back using viewingKey)
       const encryptedNote = await encryptNote(
         {
           amount: amountWei.toString(),
@@ -250,7 +273,7 @@ export function useWallet() {
         viewingPubKey(viewingKey)
       );
 
-      // 2. 调 Shield.deposit
+      // 2. Call Shield.deposit
       const NATIVE_TOKEN = '0x0000000000000000000000000000000000000000' as const;
       const hash = await writeContractAsync({
         chain: atoshiL2,
@@ -282,9 +305,9 @@ export function useWallet() {
         gasPrice: 2_000_000_000n,
       });
 
-      // 3. 等 tx 上链 + 从 Deposit 事件解出 leafIndex
-      //    Shield deposit 后必须知道 leafIndex 才能 Unshield / Transfer (算 nullifier 用)
-      //    之前存 -1 占位等用户手动恢复, 太坑. 现在自动同步.
+      // 3. Wait for the tx to be mined + parse leafIndex out of the Deposit event
+      //    After a Shield deposit, knowing the leafIndex is required to Unshield / Transfer (used to compute the nullifier)
+      //    Previously we stored -1 as a placeholder and waited for the user to recover manually, which was painful. Now we sync automatically.
       const receiptProvider = new ethers.JsonRpcProvider(
         config.l2.rpcUrl,
         { chainId: config.l2.chainId, name: 'atoshi-l2' },
@@ -292,7 +315,7 @@ export function useWallet() {
       );
       let leafIndex = -1;
       try {
-        // 轮询 receipt (fork11 RPC 不一定立刻返回)
+        // Poll for the receipt (fork11 RPC may not return it immediately)
         let receipt = null;
         const deadline = Date.now() + 60_000;
         while (!receipt && Date.now() < deadline) {
@@ -300,7 +323,7 @@ export function useWallet() {
           if (!receipt) await new Promise(r => setTimeout(r, 1500));
         }
         if (receipt) {
-          // 找 Deposit 事件 (commitment 作 indexed topic 用来匹配)
+          // Find the Deposit event (commitment is used as the indexed topic for matching)
           const depositTopic = ethers.id('Deposit(uint256,uint256,uint256,address,uint256,bytes)');
           const myCommitmentTopic = '0x' + commitment.toString(16).padStart(64, '0');
           const iface = new ethers.Interface([
@@ -318,17 +341,17 @@ export function useWallet() {
           }
         }
       } catch (e) {
-        console.warn('[shield] 解析 leafIndex 失败,只能存 -1, 用户需要手动 Recover Note:', e);
+        console.warn('[shield] Failed to parse leafIndex, can only store -1; the user will need to manually Recover Note:', e);
       }
 
-      // 4. 保存 Note 到本地
+      // 4. Save the Note locally
       saveNote({
         amount: amountWei,
-        secret: blinding.toString(),  // 沿用旧字段名兼容 UI, 实际存的是 blinding
-        nullifier: '',                // 花费时才算
+        secret: blinding.toString(),  // reuses the old field name for UI compatibility; actually stores the blinding
+        nullifier: '',                // computed only when spending
         recipient: wallet.privacyKeys.publicAddress,
         spent: false,
-        leafIndex,                    // ✓ 真实 leafIndex, 可以直接 Transfer/Unshield
+        leafIndex,                    // ✓ real leafIndex, can directly Transfer/Unshield
         commitment: commitment.toString(),
       });
 
@@ -344,17 +367,17 @@ export function useWallet() {
         txHash: hash
       };
     } catch (error) {
-      console.error('Shield 失败:', error);
+      console.error('Shield failed:', error);
       throw error;
     }
   };
 
-  // 跨设备恢复: 从链上扫描 + 解密属于本人的 Note
-  // 关键: 必须为 Transfer 收到的 Note 算出真实 leafIndex (合约 Transfer 事件不带 leafIndex 字段,
-  // 但 Merkle tree 按 Deposit+Transfer 时间顺序递增. 所以扫完整 events 按顺序数即可).
+  // Cross-device recovery: scan the chain + decrypt Notes belonging to you
+  // Key point: we must compute the real leafIndex for Notes received via Transfer (the contract's Transfer event has no leafIndex field,
+  // but the Merkle tree increments in Deposit+Transfer chronological order. So scanning all events and counting in order is enough).
   const recoverNotesFromChain = async (): Promise<RecoveredNote[]> => {
     if (!wallet.privacyKeys?.isInitialized) {
-      throw new Error('请先连接钱包并签名以派生隐私身份');
+      throw new Error('Please connect your wallet and sign first to derive your privacy identity');
     }
     const viewingKey = BigInt(wallet.privacyKeys.viewingKey);
 
@@ -373,7 +396,7 @@ export function useWallet() {
       'event Transfer(uint256 indexed nullifierHash, uint256 indexed newCommitment, bytes encryptedNote)',
     ]);
 
-    // 1. 拉所有 leaf-inserting 事件 (Deposit + Transfer), 按 [blockNumber, logIndex] 排序
+    // 1. Fetch all leaf-inserting events (Deposit + Transfer), sorted by [blockNumber, logIndex]
     const latest = await provider.getBlockNumber();
     const CHUNK = 9000;
     type Entry = {
@@ -383,13 +406,13 @@ export function useWallet() {
       kind: 'deposit' | 'transfer';
       commitment: bigint;
       encryptedNote: string;
-      depositLeafIndex?: number;  // Deposit 事件自带的 leafIndex
+      depositLeafIndex?: number;  // the leafIndex carried by the Deposit event itself
     };
     const entries: Entry[] = [];
 
     for (let from = 0; from <= latest; from += CHUNK) {
       const to = Math.min(from + CHUNK - 1, latest);
-      // 拉这段所有 Shield 事件 (不过滤 topic[0])
+      // Fetch all Shield events in this range (without filtering on topic[0])
       const logs = await provider.getLogs({
         address: config.contracts.shield,
         fromBlock: from,
@@ -425,24 +448,24 @@ export function useWallet() {
       }
     }
 
-    // 2. 按 (blockNumber, logIndex) 严格排序 — 这就是合约 Merkle tree 的插入顺序
+    // 2. Sort strictly by (blockNumber, logIndex) — this is exactly the insertion order of the contract's Merkle tree
     entries.sort((a, b) => {
       if (a.blockNumber !== b.blockNumber) return a.blockNumber - b.blockNumber;
       return a.logIndex - b.logIndex;
     });
 
-    // 3. 给每个事件分配 leafIndex (从 0 递增). 同时 sanity check: Deposit 的 自带 leafIndex 必须匹配.
+    // 3. Assign a leafIndex to each event (incrementing from 0). Also sanity check: the Deposit's own leafIndex must match.
     for (let i = 0; i < entries.length; i++) {
       const e = entries[i];
       if (e.kind === 'deposit' && e.depositLeafIndex !== undefined && e.depositLeafIndex !== i) {
         console.warn(
-          `[recovery] leafIndex sanity check: entry[${i}] Deposit 自带 leafIndex=${e.depositLeafIndex} 跟时间序号 ${i} 不一致! ` +
-          `可能漏了事件 或排序错. 用 i=${i} 继续.`
+          `[recovery] leafIndex sanity check: entry[${i}] Deposit's own leafIndex=${e.depositLeafIndex} does not match chronological index ${i}! ` +
+          `An event may be missing or the ordering is wrong. Continuing with i=${i}.`
         );
       }
     }
 
-    // 4. 用 viewingKey 试解每个 encryptedNote
+    // 4. Try to decrypt each encryptedNote with the viewingKey
     const { decryptNote } = await import('@atoshi/privacy-sdk');
     const hexToBytes = (hex: string): Uint8Array => {
       const clean = hex.startsWith('0x') ? hex.slice(2) : hex;
@@ -459,7 +482,7 @@ export function useWallet() {
       if (!plaintext) continue;
       recovered.push({
         commitment: e.commitment,
-        leafIndex: i,            // ⭐ 用时间序号作 leafIndex (Deposit + Transfer 统一编号)
+        leafIndex: i,            // ⭐ use the chronological index as the leafIndex (Deposit + Transfer share a unified numbering)
         blockNumber: e.blockNumber,
         txHash: e.txHash,
         source: e.kind,
@@ -469,7 +492,7 @@ export function useWallet() {
       });
     }
 
-    // 5. 合并到本地 (按 commitment 去重)
+    // 5. Merge into local storage (deduplicated by commitment)
     const existing = loadNotes();
     const existingCommitments = new Set(existing.map((n: any) => n.commitment));
     for (const note of recovered) {
@@ -486,73 +509,75 @@ export function useWallet() {
     }
     localStorage.setItem('privacy_notes', JSON.stringify(existing));
     localStorage.setItem('last_scanned_block', latest.toString());
-    console.log(`[recovery] 共 ${entries.length} leaf-inserting 事件, 恢复 ${recovered.length} 笔属于本人的 Note`);
+    refreshPrivateState();          // ⭐ UI refreshes immediately
+    console.log(`[recovery] ${entries.length} leaf-inserting events total, recovered ${recovered.length} Notes belonging to you`);
     return recovered;
   };
 
-  // 旧的 generateNote / computeCommitment (用 keccak 占位) 已删除:
-  // - Note 构造用 sdk/atoshi-crypto.ts 的 randomBlinding + computeCommitment (真实 Poseidon)
-  // - 直接在 shield() 流程里 inline (line 142-160)
+  // The old generateNote / computeCommitment (using keccak as a placeholder) has been removed:
+  // - Note construction uses randomBlinding + computeCommitment from sdk/atoshi-crypto.ts (real Poseidon)
+  // - Inlined directly in the shield() flow (line 142-160)
 
-  // 辅助函数：保存 Note
+  // Helper function: save a Note
   const saveNote = (note: any): void => {
     const notes = loadNotes();
-    // 将 BigInt 转换为字符串以便序列化
+    // Convert BigInt to string for serialization
     const serializedNote = {
       ...note,
       amount: note.amount.toString()
     };
     notes.push(serializedNote);
     localStorage.setItem('privacy_notes', JSON.stringify(notes));
+    refreshPrivateState();    //  UI refreshes immediately (the new Note shows up in the Note list)
   };
 
-  // 辅助函数：加载 Notes
+  // Helper function: load Notes
   const loadNotes = (): any[] => {
     const stored = localStorage.getItem('privacy_notes');
     if (!stored) return [];
     
     try {
       const notes = JSON.parse(stored);
-      // 保留所有字段, amount 转回 BigInt
-      // (注意: secret/commitment 保持 decimal 字符串, 用的时候再 BigInt(...))
+      // Keep all fields, convert amount back to BigInt
+      // (Note: secret/commitment stay as decimal strings, converted with BigInt(...) when used)
       return notes.map((note: any) => ({
         ...note,
         amount: BigInt(note.amount),
       }));
     } catch (error) {
-      console.error('加载 Notes 失败:', error);
+      console.error('Failed to load Notes:', error);
       return [];
     }
   };
 
-  // Transfer (隐私 → 隐私) — 真实 ZK proof + Shield.transfer
+  // Transfer (private → private) — real ZK proof + Shield.transfer
   //
-  // `to` 参数是 Bob 的"隐私收款码", 是一个 JSON 字符串(或 base64 编码), 包含:
+  // The `to` parameter is Bob's "privacy receiving code", a JSON string (or base64-encoded), containing:
   //   { ownerPubkey: "...", viewingPubKey: "0x..." }
   //
-  // Bob 在自己设置 Setup Privacy 后, 钱包应展示一个二维码 / 复制按钮
-  // 让 Bob 把这两个公开值分享给 Alice. Alice 扫码/粘贴后调本函数.
+  // After Bob runs Setup Privacy on his side, the wallet should display a QR code / copy button
+  // so Bob can share these two public values with Alice. Alice scans/pastes them and then calls this function.
   //
-  // 安全: ownerPubkey 和 viewingPubKey 都是公开值, 分享不会泄漏 Bob 的资金.
+  // Security: both ownerPubkey and viewingPubKey are public values, so sharing them does not leak Bob's funds.
   const privateSend = async (amount: string, to: string): Promise<Transaction> => {
-    if (!walletClient) throw new Error('请先连接钱包,并切换到 Atoshi L2 链 (chain 67890)');
-    if (!wallet.privacyKeys?.isInitialized) throw new Error('请先初始化隐私身份');
+    if (!walletClient) throw new Error('Please connect your wallet first and switch to the Atoshi L2 chain (chain 67890)');
+    if (!wallet.privacyKeys?.isInitialized) throw new Error('Please initialize your privacy identity first');
 
     const amountWei = ethers.parseEther(amount);
     const spendingKey = BigInt(wallet.privacyKeys.spendingKey);
 
-    // 1. 解析 Bob 的收款码
+    // 1. Parse Bob's receiving code
     let bobOwnerPubkey: bigint;
     let bobViewingPubKey: Uint8Array;
     try {
       const trimmed = to.trim();
-      // 支持两种格式:
+      // Supports two formats:
       //   A) JSON: {"ownerPubkey":"...","viewingPubKey":"0x..."}
-      //   B) 简化纯 ownerPubkey (Bob 还没分享 viewingPubKey, fallback 加密给自己)
+      //   B) Simplified plain ownerPubkey (Bob hasn't shared the viewingPubKey yet, fallback to encrypting to yourself)
       if (trimmed.startsWith('{')) {
         const parsed = JSON.parse(trimmed);
         if (!parsed.ownerPubkey || !parsed.viewingPubKey) {
-          throw new Error('收款码缺字段');
+          throw new Error('receiving code is missing fields');
         }
         bobOwnerPubkey = BigInt(parsed.ownerPubkey);
         const hex = parsed.viewingPubKey.startsWith('0x') ? parsed.viewingPubKey.slice(2) : parsed.viewingPubKey;
@@ -560,62 +585,62 @@ export function useWallet() {
         for (let i = 0; i < bobViewingPubKey.length; i++) {
           bobViewingPubKey[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
         }
-        if (bobViewingPubKey.length !== 32) throw new Error('viewingPubKey 必须 32 字节');
+        if (bobViewingPubKey.length !== 32) throw new Error('viewingPubKey must be 32 bytes');
       } else {
-        // Fallback: 旧格式只有 ownerPubkey, 加密给自己(用户兜底, Bob 需要带外传 Note)
+        // Fallback: the old format only has ownerPubkey, so encrypt to yourself (user fallback; Bob needs the Note delivered out of band)
         bobOwnerPubkey = BigInt(trimmed);
         bobViewingPubKey = viewingPubKey(BigInt(wallet.privacyKeys.viewingKey));
-        console.warn('[transfer] 收款码不带 viewingPubKey,加密给自己(Bob 收不到 Note 通知)');
+        console.warn('[transfer] receiving code has no viewingPubKey, encrypting to yourself (Bob will not receive a Note notification)');
       }
     } catch (e: any) {
-      throw new Error(`无效的收款码: ${e?.message || e}`);
+      throw new Error(`Invalid receiving code: ${e?.message || e}`);
     }
 
-    // 2. 选一笔金额相等的本地 Note
+    // 2. Pick a local Note with an equal amount
     const availableNotes = loadNotes().filter((n: any) => !n.spent);
     const matchingNotes = availableNotes.filter((n: any) => BigInt(n.amount) === amountWei);
     if (matchingNotes.length === 0) {
       if (availableNotes.length === 0) {
         throw new Error(
-          `池子里没有任何 Note. 请先 Shield Funds (例: Shield ${amount} ATOSHI),\n` +
-          `然后点 "🔄 从链上恢复 Note" 同步 leafIndex,\n` +
-          `再回来转账.`
+          `There are no Notes in the pool. Please Shield Funds first (e.g. Shield ${amount} ATOSHI),\n` +
+          `then click "🔄 Recover Notes from chain" to sync the leafIndex,\n` +
+          `then come back to transfer.`
         );
       }
-      // 列出现有 Note 金额清单
+      // List the amounts of the existing Notes
       const amountsList = availableNotes
         .map((n: any) => ethers.formatEther(n.amount))
         .join(', ');
       throw new Error(
-        `池子里没有金额 = ${amount} ATOSHI 的 Note.\n\n` +
-        `V1 不支持找零, 必须 Note 金额跟转账金额完全相等.\n\n` +
-        `您当前可用 Note 金额: [${amountsList}] ATOSHI\n\n` +
-        `解决: 先 Shield ${amount} ATOSHI 再来转账.`
+        `There is no Note with amount = ${amount} ATOSHI in the pool.\n\n` +
+        `V1 does not support change, so the Note amount must exactly equal the transfer amount.\n\n` +
+        `Your currently available Note amounts: [${amountsList}] ATOSHI\n\n` +
+        `Solution: Shield ${amount} ATOSHI first, then transfer.`
       );
     }
     const oldNote = matchingNotes[0];
-    if (oldNote.leafIndex < 0) throw new Error('Note 还没确认 leafIndex,请先点"🔄 从链上恢复 Note"');
+    if (oldNote.leafIndex < 0) throw new Error('The Note has no confirmed leafIndex yet; please click "🔄 Recover Notes from chain" first');
 
-    // 3. 构造新 Note (owner = Bob)
+    // 3. Construct the new Note (owner = Bob)
     const newBlinding = randomBlinding();
     const tokenId = 0n;
     const newCommitment = await atoshiComputeCommitment(amountWei, tokenId, bobOwnerPubkey, newBlinding);
 
-    // 加密 newNote 给 Bob (用 Bob 的 viewingPubKey 加密, Bob 扫链能解开)
-    // 如果用户没提供 Bob 的 viewingPubKey, 会 fallback 用 Alice 自己的(在上面解析时已设)
+    // Encrypt newNote to Bob (encrypted with Bob's viewingPubKey, so Bob can decrypt it when scanning the chain)
+    // If the user didn't provide Bob's viewingPubKey, it falls back to Alice's own (already set during parsing above)
     const encryptedNote = await encryptNote(
       { amount: amountWei.toString(), tokenId: '0', blinding: newBlinding.toString() },
       bobViewingPubKey
     );
 
-    // 4. 准备 provider + 生成 ZK proof
+    // 4. Prepare the provider + generate the ZK proof
     const provider = new ethers.JsonRpcProvider(
       config.l2.rpcUrl,
       { chainId: config.l2.chainId, name: 'atoshi-l2' },
       { batchMaxCount: 1, staticNetwork: true }
     );
 
-    console.log('[transfer] 生成 ZK proof...');
+    console.log('[transfer] Generating ZK proof...');
     const { proof, root, nullifierHash } = await prepareAndProveTransfer({
       provider,
       shieldAddress: config.contracts.shield,
@@ -632,7 +657,7 @@ export function useWallet() {
       newBlinding,
     }, (stage) => console.log('[transfer]', stage));
 
-    // 5. 调 Shield.transfer
+    // 5. Call Shield.transfer
     const hash = await writeContractAsync({
       chain: atoshiL2,
       account: walletClient.account.address as `0x${string}`,
@@ -671,12 +696,13 @@ export function useWallet() {
       gasPrice: 2_000_000_000n,
     });
 
-    // 6. 标记旧 Note 已花费
+    // 6. Mark the old Note as spent
     const notes = loadNotes();
     for (const n of notes) {
       if (n.commitment === oldNote.commitment) { n.spent = true; n.nullifier = nullifierHash; break; }
     }
     localStorage.setItem('privacy_notes', JSON.stringify(notes));
+    refreshPrivateState();      // ⭐ UI refreshes immediately (old Note marked spent + balance decreases)
 
     return {
       id: hash,
@@ -692,46 +718,46 @@ export function useWallet() {
     };
   };
 
-  // Unshield (隐私 → 明文) — 真实 ZK proof + Shield.withdraw
+  // Unshield (private → public) — real ZK proof + Shield.withdraw
   const unshield = async (amount: string, to: string): Promise<Transaction> => {
-    if (!walletClient) throw new Error('请先连接钱包,并切换到 Atoshi L2 链 (chain 67890)');
-    if (!wallet.privacyKeys?.isInitialized) throw new Error('请先初始化隐私身份');
+    if (!walletClient) throw new Error('Please connect your wallet first and switch to the Atoshi L2 chain (chain 67890)');
+    if (!wallet.privacyKeys?.isInitialized) throw new Error('Please initialize your privacy identity first');
 
     const amountWei = ethers.parseEther(amount);
     const spendingKey = BigInt(wallet.privacyKeys.spendingKey);
 
-    // 1. 找金额完全匹配的本地 Note (V1 不支持找零)
+    // 1. Find a local Note that exactly matches the amount (V1 does not support change)
     const availableNotes = loadNotes().filter((n: any) => !n.spent);
     const matchingNotes = availableNotes.filter((n: any) => BigInt(n.amount) === amountWei);
     if (matchingNotes.length === 0) {
       if (availableNotes.length === 0) {
         throw new Error(
-          `池子里没有任何 Note. 请先 Shield Funds ${amount} ATOSHI,\n` +
-          `然后点 "🔄 从链上恢复 Note", 再回来取款.`
+          `There are no Notes in the pool. Please Shield Funds ${amount} ATOSHI first,\n` +
+          `then click "🔄 Recover Notes from chain", then come back to withdraw.`
         );
       }
       const amountsList = availableNotes
         .map((n: any) => ethers.formatEther(n.amount))
         .join(', ');
       throw new Error(
-        `池子里没有金额 = ${amount} ATOSHI 的 Note.\n\n` +
-        `V1 不支持自动找零, 必须 Note 金额跟取款金额完全相等.\n\n` +
-        `您当前可用 Note 金额: [${amountsList}] ATOSHI\n\n` +
-        `解决: 改成取一张已有的 Note 完整金额, 或先 Shield ${amount} ATOSHI 再取.`
+        `There is no Note with amount = ${amount} ATOSHI in the pool.\n\n` +
+        `V1 does not support automatic change, so the Note amount must exactly equal the withdrawal amount.\n\n` +
+        `Your currently available Note amounts: [${amountsList}] ATOSHI\n\n` +
+        `Solution: withdraw the full amount of an existing Note instead, or Shield ${amount} ATOSHI first and then withdraw.`
       );
     }
     const note = matchingNotes[0];
-    if (note.leafIndex < 0) throw new Error('Note 还没确认 leafIndex (没扫到链上),请先点"🔄 从链上恢复 Note"按钮');
+    if (note.leafIndex < 0) throw new Error('The Note has no confirmed leafIndex yet (not found on chain); please click the "🔄 Recover Notes from chain" button first');
 
-    // 2. 准备 provider (fork11 兼容)
+    // 2. Prepare the provider (fork11 compatible)
     const provider = new ethers.JsonRpcProvider(
       config.l2.rpcUrl,
       { chainId: config.l2.chainId, name: 'atoshi-l2' },
       { batchMaxCount: 1, staticNetwork: true }
     );
 
-    // 3. 重建 Merkle tree + 生成 ZK proof (耗时 10-30 秒)
-    console.log('[unshield] 开始生成 ZK proof...');
+    // 3. Rebuild the Merkle tree + generate the ZK proof (takes 10-30 seconds)
+    console.log('[unshield] Starting ZK proof generation...');
     const { proof, root, nullifierHash } = await prepareAndProveUnshield({
       provider,
       shieldAddress: config.contracts.shield,
@@ -740,13 +766,13 @@ export function useWallet() {
         commitment: BigInt(note.commitment),
         amount: BigInt(note.amount),
         tokenId: 0n,
-        blinding: BigInt(note.secret),  // secret 字段实际存的是 blinding
+        blinding: BigInt(note.secret),  // the secret field actually stores the blinding
         leafIndex: note.leafIndex,
       },
       recipientAddress: to,
     }, (stage) => console.log('[unshield]', stage));
 
-    // 4. 调 Shield.withdraw
+    // 4. Call Shield.withdraw
     const NATIVE_TOKEN = '0x0000000000000000000000000000000000000000' as const;
     const hash = await writeContractAsync({
       chain: atoshiL2,
@@ -783,8 +809,8 @@ export function useWallet() {
         BigInt(root),
         BigInt(nullifierHash),
         to as `0x${string}`,
-        NATIVE_TOKEN,        // relayer: 自付模式
-        0n,                  // fee: 自付
+        NATIVE_TOKEN,        // relayer: self-pay mode
+        0n,                  // fee: self-pay
         NATIVE_TOKEN,
         amountWei,
       ],
@@ -792,12 +818,13 @@ export function useWallet() {
       gasPrice: 2_000_000_000n,
     });
 
-    // 5. 本地标记 Note 已花费
+    // 5. Mark the Note as spent locally
     const notes = loadNotes();
     for (const n of notes) {
       if (n.commitment === note.commitment) { n.spent = true; n.nullifier = nullifierHash; break; }
     }
     localStorage.setItem('privacy_notes', JSON.stringify(notes));
+    refreshPrivateState();      // ⭐ UI refreshes immediately (Note marked spent + Private Balance decreases)
 
     return {
       id: hash,
@@ -813,25 +840,25 @@ export function useWallet() {
     };
   };
 
-  // 普通转账
+  // Regular transfer
   const transfer = async (amount: string, to: string): Promise<Transaction> => {
     if (!walletClient) {
-      throw new Error('请先连接钱包,并切换到 Atoshi L2 链 (chain 67890)');
+      throw new Error('Please connect your wallet first and switch to the Atoshi L2 chain (chain 67890)');
     }
 
     try {
-      // 使用 Wagmi 的 sendTransaction
-      // ⚠️ fork11 L2 只接受 Type 0 (legacy) tx, 不收 EIP-1559 (Type 2)
-      // 必须显式 type: 'legacy', 否则 wagmi 默认 Type 2 → "invalid sender" 报错
+      // Use Wagmi's sendTransaction
+      // ⚠️ fork11 L2 only accepts Type 0 (legacy) txs, it does not accept EIP-1559 (Type 2)
+      // type: 'legacy' must be set explicitly, otherwise wagmi defaults to Type 2 → "invalid sender" error
       const hash = await sendTransactionAsync({
         to: to as `0x${string}`,
         value: parseEther(amount),
         gas: 21000n,
-        gasPrice: 2_000_000_000n,  // 2 gwei (跟 Shield/Unshield 一致)
-        type: 'legacy',             // ⭐ fork11 必须
+        gasPrice: 2_000_000_000n,  // 2 gwei (consistent with Shield/Unshield)
+        type: 'legacy',             // ⭐ required for fork11
       });
 
-      // 等待交易确认
+      // Wait for the transaction to be confirmed
       if (provider) {
         await provider.waitForTransaction(hash);
       }
@@ -848,7 +875,7 @@ export function useWallet() {
         txHash: hash
       };
     } catch (error) {
-      console.error('转账失败:', error);
+      console.error('Transfer failed:', error);
       throw error;
     }
   };
@@ -861,6 +888,8 @@ export function useWallet() {
     unshield,
     transfer,
     updatePrivateBalance,
-    recoverNotesFromChain,    // 跨设备恢复:从链扫所有 Deposit, 用 viewingKey 解密属于本人的 Note
+    recoverNotesFromChain,    // Cross-device recovery: scan all Deposits from the chain and use viewingKey to decrypt Notes belonging to you
+    localNotes,               // Local Note list (for UI rendering)
+    refreshPrivateState,      // Manually refresh the UI after any Note change (already called automatically inside shield/transfer/unshield/recover)
   };
 }

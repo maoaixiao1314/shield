@@ -1,6 +1,6 @@
 import React from 'react';
 
-// 最小化测试组件
+// Minimal test component
 const TestApp: React.FC = () => {
   return (
     <div style={{ 
@@ -24,7 +24,7 @@ const TestApp: React.FC = () => {
           🎉 Atoshi Privacy Wallet
         </h1>
         <p style={{ fontSize: '1.2rem', marginBottom: '2rem' }}>
-          ✅ React 加载成功！
+          ✅ React loaded successfully!
         </p>
         <div style={{
           background: 'rgba(255, 255, 255, 0.2)',
@@ -33,10 +33,10 @@ const TestApp: React.FC = () => {
           marginTop: '1rem'
         }}>
           <p style={{ fontSize: '0.9rem', margin: 0 }}>
-            如果你看到这个页面，说明基础配置正常。
+            If you can see this page, the basic configuration is working.
           </p>
           <p style={{ fontSize: '0.9rem', margin: '0.5rem 0 0 0' }}>
-            现在可以加载完整的钱包界面了！
+            You can now load the full wallet interface!
           </p>
         </div>
       </div>

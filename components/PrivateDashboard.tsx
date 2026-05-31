@@ -5,13 +5,24 @@ import { Ghost, ShieldX, Sparkles, Key, Info, ExternalLink, Eye, EyeOff } from '
 import HistoryItem from './HistoryItem';
 import QRCodeDisplay from './QRCodeDisplay';
 
+interface LocalNote {
+  amount: string | bigint;   // String or BigInt (loadNotes converts amount to BigInt)
+  secret: string;
+  nullifier: string;
+  recipient: string;
+  spent: boolean;
+  leafIndex: number;
+  commitment?: string;
+}
+
 interface PrivateDashboardProps {
   wallet: WalletState;
   transactions: Transaction[];
+  notes: LocalNote[];                   // ⭐ Added: local Note list
   onAction: (type: TransactionType) => void;
 }
 
-const PrivateDashboard: React.FC<PrivateDashboardProps> = ({ wallet, transactions, onAction }) => {
+const PrivateDashboard: React.FC<PrivateDashboardProps> = ({ wallet, transactions, notes, onAction }) => {
   const [showKeys, setShowKeys] = useState(false);
   const [viewingPrivacyKey, setViewingPrivacyKey] = useState(false);
 
@@ -110,19 +121,19 @@ const PrivateDashboard: React.FC<PrivateDashboardProps> = ({ wallet, transaction
                </button>
             </div>
 
-            {/* 我的隐私收款码 — 别人 transfer 给我用 */}
+            {/* My privacy receiving code — used by others to transfer to me */}
             {(wallet.privacyKeys as any).receivingCode && (
               <div className="mt-3 bg-zinc-950 p-4 rounded-xl border border-zinc-800">
-                <span className="text-[9px] font-black uppercase text-emerald-500 tracking-tighter">我的隐私收款码 (别人转账给我用)</span>
+                <span className="text-[9px] font-black uppercase text-emerald-500 tracking-tighter">My Privacy Receiving Code (for others to transfer to me)</span>
 
-                {/* 二维码 - 主要分享方式, 对方扫一下就 OK */}
+                {/* QR code - the primary sharing method, the other party just scans it */}
                 <div className="mt-3 flex justify-center bg-zinc-950 p-3 rounded-lg">
                   <QRCodeDisplay data={(wallet.privacyKeys as any).receivingCode} size={200} />
                 </div>
 
-                {/* 同时也提供纯文本(适合 IM/邮件粘贴) */}
+                {/* Also provide plain text (suitable for pasting into IM/email) */}
                 <details className="mt-3">
-                  <summary className="text-[10px] text-zinc-500 cursor-pointer hover:text-zinc-300">▸ 显示文本格式 (粘贴到聊天软件用)</summary>
+                  <summary className="text-[10px] text-zinc-500 cursor-pointer hover:text-zinc-300">▸ Show text format (for pasting into chat apps)</summary>
                   <div className="mt-2 break-all text-[10px] font-mono text-zinc-400 bg-zinc-900 p-2 rounded max-h-32 overflow-y-auto">
                     {(wallet.privacyKeys as any).receivingCode}
                   </div>
@@ -131,11 +142,11 @@ const PrivateDashboard: React.FC<PrivateDashboardProps> = ({ wallet, transaction
                 <button
                   onClick={() => {
                     navigator.clipboard.writeText((wallet.privacyKeys as any).receivingCode);
-                    alert('收款码已复制! 把它发给对方,对方在 "Shielded Send" 时粘贴(或扫上面的二维码)');
+                    alert('Receiving code copied! Send it to the other party, and they can paste it when doing a "Shielded Send" (or scan the QR code above)');
                   }}
                   className="mt-3 w-full py-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-500/20 transition-colors"
                 >
-                  📋 复制收款码到剪贴板
+                  📋 Copy Receiving Code to Clipboard
                 </button>
               </div>
             )}
@@ -143,23 +154,84 @@ const PrivateDashboard: React.FC<PrivateDashboardProps> = ({ wallet, transaction
         )}
       </div>
 
+      {/* ⭐ Changed to Note list: shows amount/status/leafIndex of all Notes in the local pool */}
       <div className="space-y-4">
         <div className="flex justify-between items-center">
-          <h4 className="text-zinc-100 font-bold">Encrypted Ledger (Local)</h4>
-          <button className="text-purple-400 text-xs font-bold uppercase hover:underline">Clear Notes</button>
+          <h4 className="text-zinc-100 font-bold">Privacy Note List (Local)</h4>
+          <span className="text-[10px] text-zinc-500 uppercase tracking-widest">
+            Available {notes.filter(n => !n.spent).length} / Total {notes.length}
+          </span>
         </div>
-        
-        <div className="space-y-3">
-          {transactions.map(tx => (
-            <HistoryItem key={tx.id} tx={tx} isPrivate={true} />
-          ))}
-          {transactions.length === 0 && (
+
+        <div className="space-y-2">
+          {notes.length === 0 ? (
             <div className="py-12 text-center text-zinc-600 italic text-sm">
-              No local notes found in current state.
+              No Notes yet. Shield a transaction, or click "🔄 Recover NOTE from chain" to sync.
             </div>
+          ) : (
+            notes
+              .slice()
+              .sort((a, b) => (a.spent ? 1 : 0) - (b.spent ? 1 : 0))   // available ones first
+              .map((note, i) => {
+                const amountEther = (() => {
+                  try {
+                    const big = typeof note.amount === 'bigint' ? note.amount : BigInt(note.amount);
+                    return (Number(big) / 1e18).toFixed(4);
+                  } catch {
+                    return '?';
+                  }
+                })();
+                const commitmentShort = note.commitment
+                  ? `${note.commitment.slice(0, 6)}...${note.commitment.slice(-4)}`
+                  : 'unknown';
+                return (
+                  <div
+                    key={i}
+                    className={`p-3 rounded-xl border flex justify-between items-center ${
+                      note.spent
+                        ? 'bg-zinc-900/30 border-zinc-800 opacity-50'
+                        : 'bg-zinc-900 border-purple-500/30'
+                    }`}
+                  >
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-base font-black ${note.spent ? 'line-through text-zinc-500' : 'text-purple-300'}`}>
+                          {amountEther} ATOSHI
+                        </span>
+                        {note.spent && (
+                          <span className="text-[9px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 uppercase tracking-widest">
+                            Spent
+                          </span>
+                        )}
+                        {!note.spent && note.leafIndex < 0 && (
+                          <span className="text-[9px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 uppercase tracking-widest">
+                            Pending Sync
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-zinc-500 font-mono">
+                        leaf #{note.leafIndex} · {commitmentShort}
+                      </span>
+                    </div>
+                    <Ghost size={16} className={note.spent ? 'text-zinc-700' : 'text-purple-400'} />
+                  </div>
+                );
+              })
           )}
         </div>
       </div>
+
+      {/* On-chain transaction records (for this session, so the user can see on-chain tx hashes) */}
+      {transactions.length > 0 && (
+        <div className="space-y-4 mt-6">
+          <h4 className="text-zinc-100 font-bold">This Session's Transaction Records</h4>
+          <div className="space-y-3">
+            {transactions.map(tx => (
+              <HistoryItem key={tx.id} tx={tx} isPrivate={true} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@atoshi/privacy-sdk": "^0.3.0",
+    "@atoshi/privacy-sdk": "^0.3.2",
     "@noble/curves": "^2.2.0",
     "@noble/hashes": "^2.2.0",
     "@rainbow-me/rainbowkit": "^2.2.10",

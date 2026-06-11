@@ -20,9 +20,10 @@ interface PrivateDashboardProps {
   transactions: Transaction[];
   notes: LocalNote[];                   // ⭐ Added: local Note list
   onAction: (type: TransactionType) => void;
+  onClearHistory?: () => void;
 }
 
-const PrivateDashboard: React.FC<PrivateDashboardProps> = ({ wallet, transactions, notes, onAction }) => {
+const PrivateDashboard: React.FC<PrivateDashboardProps> = ({ wallet, transactions, notes, onAction, onClearHistory }) => {
   const [showKeys, setShowKeys] = useState(false);
   const [viewingPrivacyKey, setViewingPrivacyKey] = useState(false);
 
@@ -112,14 +113,10 @@ const PrivateDashboard: React.FC<PrivateDashboardProps> = ({ wallet, transaction
               </div>
             </div>
 
-            <div className="flex gap-2">
-               <button className="flex-1 py-2 rounded-lg bg-zinc-800 text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-1.5 hover:bg-zinc-700 transition-colors">
-                 <Info size={12} /> Audit Tool
-               </button>
-               <button className="flex-1 py-2 rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/20 text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-1.5 hover:bg-purple-500/20 transition-colors">
-                 <ExternalLink size={12} /> View Schema
-               </button>
-            </div>
+            {/* Audit Tool + View Schema buttons removed — they had no onClick
+                handlers and confused users into thinking the buttons were broken.
+                Bring back once the underlying features (proof-of-reserves audit +
+                ZK circuit schema browser) are implemented. */}
 
             {/* My privacy receiving code — used by others to transfer to me */}
             {(wallet.privacyKeys as any).receivingCode && (
@@ -224,7 +221,21 @@ const PrivateDashboard: React.FC<PrivateDashboardProps> = ({ wallet, transaction
       {/* On-chain transaction records (for this session, so the user can see on-chain tx hashes) */}
       {transactions.length > 0 && (
         <div className="space-y-4 mt-6">
-          <h4 className="text-zinc-100 font-bold">This Session's Transaction Records</h4>
+          <div className="flex justify-between items-center">
+            <h4 className="text-zinc-100 font-bold">This Session's Transaction Records</h4>
+            {onClearHistory && (
+              <button 
+                onClick={() => {
+                  if (window.confirm('Are you sure you want to clear all transaction history?')) {
+                    onClearHistory();
+                  }
+                }}
+                className="text-red-500 text-xs font-bold uppercase hover:underline"
+              >
+                Clear History
+              </button>
+            )}
+          </div>
           <div className="space-y-3">
             {transactions.map(tx => (
               <HistoryItem key={tx.id} tx={tx} isPrivate={true} />

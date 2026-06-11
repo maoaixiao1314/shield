@@ -74,6 +74,42 @@ import { WalletState, Transaction, TransactionType, PrivacyKeys } from '../types
 import config from '../config';
 import { atoshiL2 } from '../wagmi.config';
 
+// Bridge ABI - extracted from BRIDGE_ABI.json for better compatibility
+const BRIDGE_ABI = [
+  {
+    "inputs": [
+      { "internalType": "uint32", "name": "destinationNetwork", "type": "uint32" },
+      { "internalType": "address", "name": "destinationAddress", "type": "address" },
+      { "internalType": "uint256", "name": "amount", "type": "uint256" },
+      { "internalType": "address", "name": "token", "type": "address" },
+      { "internalType": "bool", "name": "forceUpdateGlobalExitRoot", "type": "bool" },
+      { "internalType": "bytes", "name": "permitData", "type": "bytes" }
+    ],
+    "name": "bridgeAsset",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "bytes32[32]", "name": "smtProof", "type": "bytes32[32]" },
+      { "internalType": "uint32", "name": "index", "type": "uint32" },
+      { "internalType": "bytes32", "name": "mainnetExitRoot", "type": "bytes32" },
+      { "internalType": "bytes32", "name": "rollupExitRoot", "type": "bytes32" },
+      { "internalType": "uint32", "name": "originNetwork", "type": "uint32" },
+      { "internalType": "address", "name": "originTokenAddress", "type": "address" },
+      { "internalType": "uint32", "name": "destinationNetwork", "type": "uint32" },
+      { "internalType": "address", "name": "destinationAddress", "type": "address" },
+      { "internalType": "uint256", "name": "amount", "type": "uint256" },
+      { "internalType": "bytes", "name": "metadata", "type": "bytes" }
+    ],
+    "name": "claimAsset",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+];
+
 // Create a mock Signer that uses Wagmi's signTypedData
 class WagmiSigner {
   private address: string;
@@ -131,9 +167,17 @@ export function useWallet() {
     const total = notes
       .filter((n: any) => !n.spent)
       .reduce((sum: bigint, n: any) => sum + BigInt(n.amount), 0n);
+    const formattedBalance = `${ethers.formatEther(total)} ATOSHI`;
+    console.log('[Private Balance Refresh] Refreshing private balance:', {
+      totalNotes: notes.length,
+      unspentNotes: notes.filter((n: any) => !n.spent).length,
+      totalWei: total.toString(),
+      formatted: formattedBalance,
+      timestamp: new Date().toISOString()
+    });
     setWallet(prev => ({
       ...prev,
-      privateBalance: `${ethers.formatEther(total)} ATOSHI`,
+      privateBalance: formattedBalance,
     }));
   };
 
@@ -303,9 +347,10 @@ export function useWallet() {
         value: amountWei,
         gas: 1_500_000n,
         gasPrice: 2_000_000_000n,
+        type: 'legacy',  // fork11 pool only accepts type-0; viem otherwise picks EIP-1559 once block.baseFeePerGas appears, pool rejects with "RPC submit: invalid sender"
       });
 
-      // 3. Wait for the tx to be mined + parse leafIndex out of the Deposit event
+      // 3. Wait for the transaction to be confirmed and parse leafIndex from the Deposit event
       //    After a Shield deposit, knowing the leafIndex is required to Unshield / Transfer (used to compute the nullifier)
       //    Previously we stored -1 as a placeholder and waited for the user to recover manually, which was painful. Now we sync automatically.
       const receiptProvider = new ethers.JsonRpcProvider(
@@ -354,6 +399,10 @@ export function useWallet() {
         leafIndex,                    // ✓ real leafIndex, can directly Transfer/Unshield
         commitment: commitment.toString(),
       });
+
+      console.log('[Shield] Transaction confirmed, refreshing private balance immediately...');
+      // Refresh private balance after successful transaction
+      refreshPrivateState();
 
       return {
         id: hash,
@@ -694,14 +743,31 @@ export function useWallet() {
       ],
       gas: 1_500_000n,
       gasPrice: 2_000_000_000n,
+      type: 'legacy',  // fork11 pool requires type-0 (see deposit comment)
     });
 
-    // 6. Mark the old Note as spent
+    // 6. Wait for the transaction to be confirmed
+    console.log('[transfer] Waiting for transaction confirmation...');
+    const receiptProvider = new ethers.JsonRpcProvider(
+      config.l2.rpcUrl,
+      { chainId: config.l2.chainId, name: 'atoshi-l2' },
+      { batchMaxCount: 1, staticNetwork: true }
+    );
+    let receipt = null;
+    const deadline = Date.now() + 60_000;
+    while (!receipt && Date.now() < deadline) {
+      receipt = await receiptProvider.getTransactionReceipt(hash);
+      if (!receipt) await new Promise(r => setTimeout(r, 1500));
+    }
+    console.log('[transfer] Transaction confirmed:', hash);
+
+    // 7. Mark the old Note as spent
     const notes = loadNotes();
     for (const n of notes) {
       if (n.commitment === oldNote.commitment) { n.spent = true; n.nullifier = nullifierHash; break; }
     }
     localStorage.setItem('privacy_notes', JSON.stringify(notes));
+    console.log('[PrivateSend] Transaction confirmed, refreshing private balance immediately...');
     refreshPrivateState();      // ⭐ UI refreshes immediately (old Note marked spent + balance decreases)
 
     return {
@@ -816,14 +882,31 @@ export function useWallet() {
       ],
       gas: 1_500_000n,
       gasPrice: 2_000_000_000n,
+      type: 'legacy',  // fork11 pool requires type-0 (see deposit comment)
     });
 
-    // 5. Mark the Note as spent locally
+    // 6. Wait for the transaction to be confirmed
+    console.log('[unshield] Waiting for transaction confirmation...');
+    const receiptProvider = new ethers.JsonRpcProvider(
+      config.l2.rpcUrl,
+      { chainId: config.l2.chainId, name: 'atoshi-l2' },
+      { batchMaxCount: 1, staticNetwork: true }
+    );
+    let receipt = null;
+    const deadline = Date.now() + 60_000;
+    while (!receipt && Date.now() < deadline) {
+      receipt = await receiptProvider.getTransactionReceipt(hash);
+      if (!receipt) await new Promise(r => setTimeout(r, 1500));
+    }
+    console.log('[unshield] Transaction confirmed:', hash);
+
+    // 7. Mark the Note as spent locally
     const notes = loadNotes();
     for (const n of notes) {
       if (n.commitment === note.commitment) { n.spent = true; n.nullifier = nullifierHash; break; }
     }
     localStorage.setItem('privacy_notes', JSON.stringify(notes));
+    console.log('[Unshield] Transaction confirmed, refreshing private balance immediately...');
     refreshPrivateState();      // ⭐ UI refreshes immediately (Note marked spent + Private Balance decreases)
 
     return {
@@ -863,6 +946,8 @@ export function useWallet() {
         await provider.waitForTransaction(hash);
       }
 
+      console.log('[Transfer] Transaction confirmed');
+
       return {
         id: hash,
         type: TransactionType.TRANSFER,
@@ -880,6 +965,403 @@ export function useWallet() {
     }
   };
 
+  // Bridge deposit: L1 -> L2 cross-chain transfer
+  const bridgeDeposit = async (amount: string): Promise<Transaction> => {
+    if (!walletClient) {
+      throw new Error('Please connect your wallet first');
+    }
+
+    try {
+      // Check if user is on L1 chain
+      const currentChainId = await window.ethereum.request({ method: 'eth_chainId' });
+      const l1ChainIdHex = '0x' + config.l1.chainId.toString(16);
+      
+      if (currentChainId !== l1ChainIdHex) {
+        // Switch to L1 chain
+        try {
+          await window.ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: l1ChainIdHex }],
+          });
+        } catch (switchError: any) {
+          // If chain doesn't exist, add it
+          if (switchError.code === 4902) {
+            await window.ethereum.request({
+              method: 'wallet_addEthereumChain',
+              params: [{
+                chainId: l1ChainIdHex,
+                chainName: config.l1.name,
+                nativeCurrency: { name: 'Atoshi', symbol: 'ATOS', decimals: 18 },
+                rpcUrls: [config.l1.rpcUrl],
+              }],
+            });
+          } else {
+            throw switchError;
+          }
+        }
+      }
+
+      const amountWei = ethers.parseEther(amount);
+      const destinationAddress = walletClient.account.address;
+
+      // Use the complete BRIDGE_ABI from JSON file
+      // Create provider and signer for L1
+      const l1Provider = new ethers.BrowserProvider(window.ethereum);
+      const l1Signer = await l1Provider.getSigner();
+
+      // Create bridge contract instance
+      const bridgeContract = new ethers.Contract(
+        config.contracts.l1Bridge,
+        BRIDGE_ABI,
+        l1Signer
+      );
+
+      // Call bridgeAsset
+      console.log('[bridgeDeposit] Initiating bridge transaction...');
+      const tx = await bridgeContract.bridgeAsset(
+        1,                                          // destinationNetwork (L2)
+        destinationAddress,                         // L2 receiving address
+        amountWei,                                  // Amount in wei
+        "0x0000000000000000000000000000000000000000", // Native ATOS (address(0))
+        true,                                       // forceUpdateGlobalExitRoot
+        "0x",                                       // No permit data
+        { value: amountWei }                        // Send ATOS with transaction
+      );
+
+      console.log('[bridgeDeposit] Transaction sent:', tx.hash);
+      const receipt = await tx.wait();
+      console.log('[bridgeDeposit] Transaction confirmed:', receipt.hash);
+
+      // Start polling for bridge status
+      pollBridgeStatus(destinationAddress, receipt.hash);
+
+      return {
+        id: receipt.hash,
+        type: TransactionType.BRIDGE_DEPOSIT,
+        amount: `${amount} ATOSHI`,
+        asset: 'ATOSHI',
+        timestamp: Date.now(),
+        from: walletClient.account.address,
+        to: destinationAddress,
+        status: 'pending',
+        txHash: receipt.hash
+      };
+    } catch (error) {
+      console.error('Bridge deposit failed:', error);
+      throw error;
+    }
+  };
+
+  // Poll bridge service for deposit status
+  const pollBridgeStatus = async (destAddr: string, l1TxHash: string) => {
+    const maxAttempts = 60; // 10 minutes at 10s intervals
+    let attempts = 0;
+
+    const poll = async () => {
+      try {
+        const resp = await fetch(
+          `${config.bridge.serviceUrl}/bridges/${destAddr}?limit=10`
+        );
+        const data = await resp.json();
+        
+        // Find the deposit by tx_hash
+        const deposit = data.deposits?.find((d: any) => d.tx_hash === l1TxHash);
+        
+        if (deposit) {
+          console.log('[Bridge Status]', {
+            ready_for_claim: deposit.ready_for_claim,
+            claim_tx_hash: deposit.claim_tx_hash,
+          });
+
+          // If claim_tx_hash exists, bridge is complete
+          if (deposit.claim_tx_hash && deposit.claim_tx_hash !== '') {
+            console.log('[Bridge Complete] Claim TX:', deposit.claim_tx_hash);
+            // Bridge is complete - the transaction will be updated in App component
+            return;
+          }
+
+          // If not ready yet, continue polling
+          if (!deposit.ready_for_claim) {
+            console.log('[Bridge Status] Waiting for L1->L2 sync...');
+          } else {
+            console.log('[Bridge Status] Ready for claim, waiting for auto-claim...');
+          }
+        }
+
+        attempts++;
+        if (attempts < maxAttempts) {
+          setTimeout(poll, 10000); // Poll every 10 seconds
+        } else {
+          console.warn('[Bridge Status] Polling timeout - please check manually');
+        }
+      } catch (error) {
+        console.error('[Bridge Status] Polling error:', error);
+        attempts++;
+        if (attempts < maxAttempts) {
+          setTimeout(poll, 10000);
+        }
+      }
+    };
+
+    // Start polling
+    poll();
+  };
+
+  // ==================== L2 -> L1 Bridge Withdrawal ====================
+
+  // Step 1: Call bridgeAsset on L2 to initiate withdrawal
+  const bridgeWithdraw = async (amount: string): Promise<Transaction> => {
+    if (!walletClient) {
+      throw new Error('Please connect your wallet first');
+    }
+
+    try {
+      // Check if user is on L2 chain
+      const currentChainId = await window.ethereum.request({ method: 'eth_chainId' });
+      const l2ChainIdHex = '0x' + config.l2.chainId.toString(16);
+      
+      if (currentChainId !== l2ChainIdHex) {
+        throw new Error('Please switch to Atoshi L2 chain first');
+      }
+
+      const amountWei = ethers.parseEther(amount);
+      const destinationAddress = walletClient.account.address;
+
+      // Create provider and signer for L2
+      const l2Provider = new ethers.BrowserProvider(window.ethereum);
+      const l2Signer = await l2Provider.getSigner();
+
+      // Create bridge contract instance on L2
+      const bridgeContract = new ethers.Contract(
+        config.contracts.l2Bridge,
+        BRIDGE_ABI,
+        l2Signer
+      );
+
+      // Call bridgeAsset with destinationNetwork = 0 (L1)
+      console.log('[bridgeWithdraw] Initiating L2->L1 bridge transaction...');
+      const tx = await bridgeContract.bridgeAsset(
+        0,                                          // destinationNetwork (L1)
+        destinationAddress,                         // L1 receiving address
+        amountWei,                                  // Amount in wei
+        "0x0000000000000000000000000000000000000000", // Native ATOS (address(0))
+        true,                                       // forceUpdateGlobalExitRoot
+        "0x",                                       // No permit data
+        { value: amountWei }                        // Send ATOS with transaction
+      );
+
+      console.log('[bridgeWithdraw] Transaction sent:', tx.hash);
+      const receipt = await tx.wait();
+      console.log('[bridgeWithdraw] Transaction confirmed on L2:', receipt.hash);
+
+      // Start polling for bridge status (L2->L1 takes much longer)
+      pollL2ToL1Status(destinationAddress, receipt.hash);
+
+      return {
+        id: receipt.hash,
+        type: TransactionType.BRIDGE_WITHDRAW,
+        amount: `${amount} ATOSHI`,
+        asset: 'ATOSHI',
+        timestamp: Date.now(),
+        from: walletClient.account.address,
+        to: destinationAddress,
+        status: 'pending',
+        txHash: receipt.hash
+      };
+    } catch (error) {
+      console.error('Bridge withdrawal failed:', error);
+      throw error;
+    }
+  };
+
+  // Poll bridge service for L2->L1 withdrawal status
+  const pollL2ToL1Status = async (destAddr: string, l2TxHash: string) => {
+    const maxAttempts = 720; // 2 hours at 10s intervals (much longer than L1->L2)
+    let attempts = 0;
+
+    const poll = async () => {
+      try {
+        const resp = await fetch(
+          `${config.bridge.serviceUrl}/bridges/${destAddr}?limit=50`
+        );
+        
+        if (!resp.ok) {
+          console.warn('[L2->L1 Bridge Status] Bridge service returned error:', resp.status, resp.statusText);
+          attempts++;
+          if (attempts < maxAttempts) {
+            setTimeout(poll, 10000);
+          }
+          return;
+        }
+        
+        const data = await resp.json();
+        
+        // Log all deposits for debugging (only first few attempts)
+        if (attempts < 3) {
+          console.log('[L2->L1 Bridge Debug] All deposits:', data.deposits?.map((d: any) => ({
+            tx_hash: d.tx_hash,
+            net_id: d.net_id,
+            deposit_cnt: d.deposit_cnt,
+            ready_for_claim: d.ready_for_claim
+          })));
+        }
+        
+        // Find the withdrawal by tx_hash (net_id should be 1 for L2->L1)
+        const deposit = data.deposits?.find((d: any) => 
+          d.tx_hash === l2TxHash && d.net_id === 1
+        );
+        
+        if (deposit) {
+          console.log('[L2->L1 Bridge Status]', {
+            deposit_cnt: deposit.deposit_cnt,
+            ready_for_claim: deposit.ready_for_claim,
+            claim_tx_hash: deposit.claim_tx_hash,
+            net_id: deposit.net_id,
+          });
+
+          // If claim_tx_hash exists, bridge is complete
+          if (deposit.claim_tx_hash && deposit.claim_tx_hash !== '') {
+            console.log('[L2->L1 Bridge Complete] Claim TX:', deposit.claim_tx_hash);
+            // Bridge is complete
+            return;
+          }
+
+          // If not ready yet, continue polling
+          if (!deposit.ready_for_claim) {
+            console.log('[L2->L1 Bridge Status] Waiting for ZK proof verification... (may take 1-2 hours)');
+            
+            // Show warning after 10 minutes
+            if (attempts === 60) {
+              console.warn('[L2->L1 Bridge Status] Still waiting for proof. This is normal, aggregator may be slow.');
+            }
+          } else {
+            console.log('[L2->L1 Bridge Status] Ready for claim! You can now claim on L1.');
+            // Auto-claim or notify user to claim
+            if (deposit.deposit_cnt !== undefined) {
+              await autoClaimL2ToL1(destAddr, deposit);
+            }
+          }
+        } else {
+          // Only show warning every 30 seconds to avoid spam
+          if (attempts % 3 === 0) {
+            console.warn(`[L2->L1 Bridge Status] Deposit not found yet (attempt ${attempts + 1}). Bridge service may need time to sync. TxHash: ${l2TxHash}`);
+          }
+        }
+
+        attempts++;
+        if (attempts < maxAttempts) {
+          setTimeout(poll, 10000); // Poll every 10 seconds
+        } else {
+          console.error('[L2->L1 Bridge Status] Polling timeout (2 hours) - please check manually');
+          console.error('[L2->L1 Bridge Status] Check aggregator and prover status');
+          console.error('[L2->L1 Bridge Status] Transaction hash:', l2TxHash);
+        }
+      } catch (error) {
+        console.error('[L2->L1 Bridge Status] Polling error:', error);
+        attempts++;
+        if (attempts < maxAttempts) {
+          setTimeout(poll, 10000);
+        }
+      }
+    };
+
+    // Start polling
+    poll();
+  };
+
+  // Auto-claim L2->L1 withdrawal on L1
+  const autoClaimL2ToL1 = async (destAddr: string, deposit: any) => {
+    try {
+      console.log('[Auto Claim] Starting claim process for deposit_cnt:', deposit.deposit_cnt);
+
+      // Step 1: Get merkle proof from bridge service
+      const proofResp = await fetch(
+        `${config.bridge.serviceUrl}/merkle-proof?deposit_cnt=${deposit.deposit_cnt}&net_id=1`
+      );
+      
+      if (!proofResp.ok) {
+        throw new Error(`Failed to fetch merkle proof: ${proofResp.statusText}`);
+      }
+      
+      const proofData = await proofResp.json();
+      console.log('[Auto Claim] Merkle proof fetched:', proofData);
+
+      // Step 2: Switch to L1 chain
+      const currentChainId = await window.ethereum.request({ method: 'eth_chainId' });
+      const l1ChainIdHex = '0x' + config.l1.chainId.toString(16);
+      
+      if (currentChainId !== l1ChainIdHex) {
+        console.log('[Auto Claim] Switching to L1 chain...');
+        try {
+          await window.ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: l1ChainIdHex }],
+          });
+        } catch (switchError: any) {
+          if (switchError.code === 4902) {
+            await window.ethereum.request({
+              method: 'wallet_addEthereumChain',
+              params: [{
+                chainId: l1ChainIdHex,
+                chainName: config.l1.name,
+                nativeCurrency: { name: 'Atoshi', symbol: 'ATOS', decimals: 18 },
+                rpcUrls: [config.l1.rpcUrl],
+              }],
+            });
+          } else {
+            throw switchError;
+          }
+        }
+      }
+
+      // Step 3: Call claimAsset on L1
+      const l1Provider = new ethers.BrowserProvider(window.ethereum);
+      const l1Signer = await l1Provider.getSigner();
+      const bridgeContract = new ethers.Contract(
+        config.contracts.l1Bridge,
+        BRIDGE_ABI,
+        l1Signer
+      );
+
+      console.log('[Auto Claim] Calling claimAsset on L1...');
+      const tx = await bridgeContract.claimAsset(
+        proofData.proof.smt_proof,              // bytes32[32] smtProof
+        proofData.proof.index,                   // uint32 index
+        proofData.proof.main_exit_root,          // bytes32 mainnetExitRoot
+        proofData.proof.rollup_exit_root,        // bytes32 rollupExitRoot
+        deposit.origin_network,                  // uint32 originNetwork
+        deposit.origin_token_address,            // address originTokenAddress
+        deposit.dest_net,                        // uint32 destinationNetwork
+        deposit.dest_addr,                       // address destinationAddress
+        deposit.amount,                          // uint256 amount
+        deposit.metadata                         // bytes metadata
+      );
+
+      console.log('[Auto Claim] Claim transaction sent:', tx.hash);
+      const receipt = await tx.wait();
+      console.log('[Auto Claim] Claim transaction confirmed:', receipt.hash);
+
+      return receipt.hash;
+    } catch (error: any) {
+      console.error('[Auto Claim] Claim failed:', error);
+      
+      // Handle common errors
+      if (error.message?.includes('GlobalExitRootInvalid')) {
+        console.warn('[Auto Claim] GlobalExitRootInvalid - L2 GER not synced yet, will retry in 2 minutes');
+        setTimeout(() => autoClaimL2ToL1(destAddr, deposit), 120000);
+      } else if (error.message?.includes('AlreadyClaimed')) {
+        console.log('[Auto Claim] Already claimed - skipping');
+      } else if (error.message?.includes('InvalidSmtProof')) {
+        console.warn('[Auto Claim] InvalidSmtProof - re-fetching proof and retrying');
+        setTimeout(() => autoClaimL2ToL1(destAddr, deposit), 5000);
+      } else if (error.message?.includes('InvalidNetwork')) {
+        console.error('[Auto Claim] InvalidNetwork - check L2 bridge initialization');
+      }
+      
+      throw error;
+    }
+  };
+
   return {
     wallet,
     initializePrivacy,
@@ -887,6 +1369,8 @@ export function useWallet() {
     privateSend,
     unshield,
     transfer,
+    bridgeDeposit,        // L1 -> L2 cross-chain bridge
+    bridgeWithdraw,       // L2 -> L1 cross-chain bridge
     updatePrivateBalance,
     recoverNotesFromChain,    // Cross-device recovery: scan all Deposits from the chain and use viewingKey to decrypt Notes belonging to you
     localNotes,               // Local Note list (for UI rendering)

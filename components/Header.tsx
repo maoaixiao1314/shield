@@ -52,15 +52,15 @@ const Header: React.FC<HeaderProps> = ({ wallet, activeAsset }) => {
   };
   
   return (
-    <header className="px-6 py-6 flex justify-between items-center z-20">
-      <div className="flex items-center gap-2">
+    <header className="px-6 py-6 flex justify-between items-center z-20 gap-3">
+      <div className="flex items-center gap-2 flex-shrink-0">
         <div className={`w-3 h-3 rounded-full animate-pulse ${isPublic ? 'bg-green-500' : 'bg-purple-500'}`} />
         <span className={`text-xs font-semibold tracking-wide uppercase ${isPublic ? 'text-slate-500' : 'text-zinc-400'}`}>
           {isPublic ? 'Mainnet' : 'Privacy Layer'}
         </span>
       </div>
       
-      <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium mono transition-all ${
+      <div className={`flex-1 min-w-0 flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium mono transition-all ${
         isPublic 
           ? 'bg-white border-slate-200 text-slate-600' 
           : isPrivateInitialized 
@@ -68,23 +68,25 @@ const Header: React.FC<HeaderProps> = ({ wallet, activeAsset }) => {
             : 'bg-zinc-900 border-zinc-800 text-zinc-500'
       }`}>
         {isPublic ? (
-          <Wallet size={14} className="text-blue-500" />
+          <Wallet size={14} className="text-blue-500 flex-shrink-0" />
         ) : isPrivateInitialized ? (
-          <ShieldCheck size={14} className="text-purple-400" />
+          <ShieldCheck size={14} className="text-purple-400 flex-shrink-0" />
         ) : (
-          <ShieldAlert size={14} className="text-zinc-600" />
+          <ShieldAlert size={14} className="text-zinc-600 flex-shrink-0" />
         )}
-        {isPublic 
-          ? wallet.address 
-          : isPrivateInitialized 
-            ? wallet.privacyKeys.publicAddress.slice(0, 12) + '...'
-            : 'Uninitialized'
-        }
+        <span className="truncate">
+          {isPublic 
+            ? wallet.address 
+            : isPrivateInitialized 
+              ? wallet.privacyKeys.publicAddress.slice(0, 12) + '...'
+              : 'Uninitialized'
+          }
+        </span>
       </div>
 
       <button
         onClick={handleDisconnect}
-        className={`${isPublic ? 'text-slate-400 hover:text-red-500' : 'text-zinc-500 hover:text-red-400'} transition-colors`}
+        className={`${isPublic ? 'text-slate-400 hover:text-red-500' : 'text-zinc-500 hover:text-red-400'} transition-colors flex-shrink-0`}
         title="Disconnect wallet + clear session cache"
       >
         <LogOut size={20} />

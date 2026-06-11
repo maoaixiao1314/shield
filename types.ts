@@ -8,7 +8,9 @@ export enum TransactionType {
   TRANSFER = 'TRANSFER',      // Public -> Public
   SHIELD = 'SHIELD',          // Public -> Private (Deposit)
   UNSHIELD = 'UNSHIELD',      // Private -> Public (Withdraw)
-  PRIVATE_SEND = 'PRIVATE_SEND' // Private -> Private
+  PRIVATE_SEND = 'PRIVATE_SEND', // Private -> Private
+  BRIDGE_DEPOSIT = 'BRIDGE_DEPOSIT', // L1 -> L2 Bridge
+  BRIDGE_WITHDRAW = 'BRIDGE_WITHDRAW' // L2 -> L1 Bridge
 }
 
 export interface Transaction {

@@ -8,9 +8,10 @@ interface PublicDashboardProps {
   wallet: WalletState;
   transactions: Transaction[];
   onAction: (type: TransactionType) => void;
+  onClearHistory?: () => void;
 }
 
-const PublicDashboard: React.FC<PublicDashboardProps> = ({ wallet, transactions, onAction }) => {
+const PublicDashboard: React.FC<PublicDashboardProps> = ({ wallet, transactions, onAction, onClearHistory }) => {
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="text-center">
@@ -18,6 +19,30 @@ const PublicDashboard: React.FC<PublicDashboardProps> = ({ wallet, transactions,
         <h1 className="text-5xl font-black text-slate-900 tracking-tight">{wallet.publicBalance}</h1>
       </div>
 
+      {/* Bridge Buttons - L1 <-> L2 */}
+      <div className="grid grid-cols-2 gap-4">
+        <button 
+          onClick={() => onAction(TransactionType.BRIDGE_DEPOSIT)}
+          className="flex flex-col items-center justify-center p-6 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-3xl shadow-lg hover:shadow-xl transition-all group"
+        >
+          <div className="p-3 bg-white/20 rounded-full mb-2 group-hover:scale-110 transition-transform">
+            <ArrowDownLeft size={24} />
+          </div>
+          <span className="text-sm font-bold">Deposit from Wallet</span>
+        </button>
+
+        <button 
+          onClick={() => onAction(TransactionType.BRIDGE_WITHDRAW)}
+          className="flex flex-col items-center justify-center p-6 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-3xl shadow-lg hover:shadow-xl transition-all group"
+        >
+          <div className="p-3 bg-white/20 rounded-full mb-2 group-hover:scale-110 transition-transform">
+            <ArrowUpRight size={24} />
+          </div>
+          <span className="text-sm font-bold">Withdraw to Wallet</span>
+        </button>
+      </div>
+
+      {/* Action Buttons - Send & Shield */}
       <div className="grid grid-cols-2 gap-4">
         <button 
           onClick={() => onAction(TransactionType.TRANSFER)}
@@ -43,7 +68,18 @@ const PublicDashboard: React.FC<PublicDashboardProps> = ({ wallet, transactions,
       <div className="space-y-4">
         <div className="flex justify-between items-center">
           <h4 className="text-slate-900 font-bold">Recent Public Txs</h4>
-          <button className="text-blue-600 text-xs font-bold uppercase hover:underline">View All</button>
+          {transactions.length > 0 && onClearHistory && (
+            <button 
+              onClick={() => {
+                if (window.confirm('Are you sure you want to clear all transaction history?')) {
+                  onClearHistory();
+                }
+              }}
+              className="text-red-500 text-xs font-bold uppercase hover:underline"
+            >
+              Clear History
+            </button>
+          )}
         </div>
         
         <div className="space-y-3">

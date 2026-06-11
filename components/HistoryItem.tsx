@@ -1,7 +1,8 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Transaction, TransactionType } from '../types';
 import { ArrowUpRight, ArrowDownLeft, Shield, Ghost, Info } from 'lucide-react';
+import Toast from './Toast';
 
 interface HistoryItemProps {
   tx: Transaction;
@@ -9,6 +10,8 @@ interface HistoryItemProps {
 }
 
 const HistoryItem: React.FC<HistoryItemProps> = ({ tx, isPrivate }) => {
+  const [showToast, setShowToast] = useState(false);
+
   const getIcon = () => {
     switch (tx.type) {
       case TransactionType.TRANSFER: return <ArrowUpRight size={18} />;
@@ -36,23 +39,48 @@ const HistoryItem: React.FC<HistoryItemProps> = ({ tx, isPrivate }) => {
     }
   };
 
+  // Format and truncate tx hash
+  const formatTxHash = (hash?: string) => {
+    if (!hash) return 'N/A';
+    return `${hash.slice(0, 10)}...${hash.slice(-8)}`;
+  };
+
+  // Copy tx hash to clipboard
+  const handleCopyTxHash = () => {
+    if (tx.txHash) {
+      navigator.clipboard.writeText(tx.txHash);
+      setShowToast(true);
+    }
+  };
+
   return (
     <div className={`p-4 rounded-2xl flex items-center justify-between border transition-all hover:scale-[1.02] ${isPrivate ? 'bg-zinc-900 border-zinc-800 text-zinc-300' : 'bg-white border-slate-100 text-slate-700'}`}>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-1 min-w-0">
         <div className={`p-2.5 rounded-xl ${getColorClass()}`}>
           {getIcon()}
         </div>
-        <div>
+        <div className="flex-1 min-w-0">
           <div className="text-sm font-bold flex items-center gap-1.5">
             {getLabel()}
             {tx.status === 'completed' && <div className="w-1.5 h-1.5 rounded-full bg-green-500" />}
           </div>
-          <div className="text-[10px] opacity-50 mono uppercase mt-0.5">
-            {isPrivate ? (tx.nullifier ? `Nullifier: ${tx.nullifier}` : 'Hidden on-chain') : `Tx: ${tx.txHash}`}
-          </div>
+          {/* TX Hash with truncation, underline, and click-to-copy */}
+          {!isPrivate && tx.txHash ? (
+            <button
+              onClick={handleCopyTxHash}
+              className="text-[10px] opacity-50 mono uppercase mt-0.5 truncate cursor-pointer hover:opacity-70 transition-opacity underline decoration-dotted underline-offset-2"
+              title={`Click to copy: ${tx.txHash}`}
+            >
+              Tx: {formatTxHash(tx.txHash)}
+            </button>
+          ) : isPrivate ? (
+            <div className="text-[10px] opacity-50 mono uppercase mt-0.5">
+              {tx.nullifier ? `Nullifier: ${tx.nullifier.slice(0, 10)}...${tx.nullifier.slice(-8)}` : 'Hidden on-chain'}
+            </div>
+          ) : null}
         </div>
       </div>
-      <div className="text-right">
+      <div className="text-right flex-shrink-0 ml-2">
         <div className={`text-sm font-black ${isPrivate ? 'text-zinc-100' : 'text-slate-900'}`}>
           {tx.amount}
         </div>
@@ -60,6 +88,13 @@ const HistoryItem: React.FC<HistoryItemProps> = ({ tx, isPrivate }) => {
           {new Date(tx.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </div>
       </div>
+
+      {/* Toast notification */}
+      <Toast 
+        message="TX hash copied!" 
+        isVisible={showToast} 
+        onClose={() => setShowToast(false)} 
+      />
     </div>
   );
 };

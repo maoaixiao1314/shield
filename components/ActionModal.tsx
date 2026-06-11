@@ -25,29 +25,37 @@ const ActionModal: React.FC<ActionModalProps> = ({ isOpen, onClose, type, active
       case TransactionType.PRIVATE_SEND: return 'Privacy Send';
       case TransactionType.SHIELD: return 'Shield Funds';
       case TransactionType.UNSHIELD: return 'Unshield Funds';
+      case TransactionType.BRIDGE_DEPOSIT: return 'Deposit from Wallet';
+      case TransactionType.BRIDGE_WITHDRAW: return 'Withdraw to Wallet';
       default: return 'Transaction';
     }
   };
 
   const handleConfirm = async () => {
-    // Shield does not need a "to" (it deposits into your own pool; the business layer uses your own publicAddress)
+    // Shield, Bridge Deposit and Bridge Withdraw do not need a "to" address
     if (!amount) return;
-    if (type !== TransactionType.SHIELD && !to) return;
+    if (type !== TransactionType.SHIELD && type !== TransactionType.BRIDGE_DEPOSIT && type !== TransactionType.BRIDGE_WITHDRAW && !to) return;
     setIsProcessing(true);
 
-    // Simulate ZK-Proof generation for privacy tasks
-    if (activeAsset === AssetType.PRIVATE || type === TransactionType.SHIELD || type === TransactionType.UNSHIELD) {
-      for (let i = 0; i <= 100; i += 5) {
-        setProofProgress(i);
-        await new Promise(r => setTimeout(r, 80));
+    try {
+      // Simulate ZK-Proof generation for privacy tasks
+      if (activeAsset === AssetType.PRIVATE || type === TransactionType.SHIELD || type === TransactionType.UNSHIELD) {
+        for (let i = 0; i <= 100; i += 5) {
+          setProofProgress(i);
+          await new Promise(r => setTimeout(r, 80));
+        }
       }
-    } else {
-      await new Promise(r => setTimeout(r, 1000));
-    }
+      // For bridge deposit and other transactions, the loading state will be maintained
+      // until the transaction is confirmed (handled in onConfirm)
 
-    onConfirm(amount, to);
-    setIsProcessing(false);
-    setProofProgress(0);
+      await onConfirm(amount, to); // Wait for the transaction to complete
+    } catch (error) {
+      console.error('Transaction failed:', error);
+      // Keep processing state to show error
+    } finally {
+      setIsProcessing(false);
+      setProofProgress(0);
+    }
   };
 
   const isDark = activeAsset === AssetType.PRIVATE;
@@ -85,10 +93,24 @@ const ActionModal: React.FC<ActionModalProps> = ({ isOpen, onClose, type, active
           </div>
 
           {/* Shield type: funds are deposited into your own privacy pool, so no recipient input is needed */}
-          {type === TransactionType.SHIELD ? (
+          {type === TransactionType.SHIELD || type === TransactionType.BRIDGE_DEPOSIT || type === TransactionType.BRIDGE_WITHDRAW ? (
             <div className={`p-3 rounded-2xl border ${isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-400' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
-              <span className="text-[10px] font-bold uppercase tracking-widest opacity-60">Deposit to</span>
-              <p className="mt-1 text-xs">Your own privacy pool (no recipient address required)</p>
+              <span className="text-[10px] font-bold uppercase tracking-widest opacity-60">
+                {type === TransactionType.BRIDGE_DEPOSIT 
+                  ? 'Deposit to' 
+                  : type === TransactionType.BRIDGE_WITHDRAW
+                  ? 'Withdraw to'
+                  : 'Deposit to'
+                }
+              </span>
+              <p className="mt-1 text-xs">
+                {type === TransactionType.BRIDGE_DEPOSIT 
+                  ? 'Your L2 wallet address'
+                  : type === TransactionType.BRIDGE_WITHDRAW
+                  ? 'Your L1 wallet address'
+                  : 'Your own privacy pool (no recipient address required)'
+                }
+              </p>
             </div>
           ) : (
             <div>
@@ -102,7 +124,7 @@ const ActionModal: React.FC<ActionModalProps> = ({ isOpen, onClose, type, active
                   placeholder={
                     type === TransactionType.PRIVATE_SEND
                       ? "Paste the recipient's receiving code or tap scan on the right →"
-                      : (isDark ? 'zk_atos_...' : '0x...')
+                      : (isDark ? '0x_...' : '0x...')
                   }
                   className="w-full bg-transparent p-4 pr-14 text-xs font-medium mono outline-none"
                 />
@@ -151,7 +173,7 @@ const ActionModal: React.FC<ActionModalProps> = ({ isOpen, onClose, type, active
           )}
 
           <button 
-            disabled={isProcessing || !amount || (type !== TransactionType.SHIELD && !to)}
+            disabled={isProcessing || !amount || (type !== TransactionType.SHIELD && type !== TransactionType.BRIDGE_DEPOSIT && type !== TransactionType.BRIDGE_WITHDRAW && !to)}
             onClick={handleConfirm}
             className={`w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100 ${
               isDark ? 'privacy-gradient text-white' : 'public-gradient text-white'
@@ -171,9 +193,13 @@ const ActionModal: React.FC<ActionModalProps> = ({ isOpen, onClose, type, active
           </button>
           
           <p className="text-[10px] text-center opacity-30 px-6 leading-relaxed">
-            {isDark 
-              ? 'Funds will be moved using a nullifier circuit. No linking data will be visible to public explorers.'
-              : 'This is a public transaction. Details will be visible on-chain to anyone.'}
+            {type === TransactionType.BRIDGE_DEPOSIT
+              ? 'Transfer ATOSHI from your wallet to L2 for privacy transactions.'
+              : type === TransactionType.BRIDGE_WITHDRAW
+              ? 'Bridge ATOSHI from L2 back to L1. This may take 1-2 hours due to ZK proof verification.'
+              : isDark 
+                ? 'Funds will be moved using a nullifier circuit. No linking data will be visible to public explorers.'
+                : 'This is a public transaction. Details will be visible on-chain to anyone.'}
           </p>
         </div>
       </div>

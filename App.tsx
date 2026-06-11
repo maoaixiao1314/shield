@@ -14,12 +14,39 @@ import { useWallet } from './hooks/useWallet';
 
 const App: React.FC = () => {
   const [activeAsset, setActiveAsset] = useState<AssetType>(AssetType.PUBLIC);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [activeAction, setActiveAction] = useState<TransactionType | null>(null);
   
   const { address, isConnected } = useAccount();
-  const { data: balance } = useBalance({ address });
+  const { data: balance, refetch: refetchBalance } = useBalance({ address });
+  
+  // Initialize transactions from localStorage (isolated by address)
+  const [transactions, setTransactions] = useState<Transaction[]>(() => {
+    if (!address) return [];
+    const storageKey = `transactions_${address.toLowerCase()}`;
+    const stored = localStorage.getItem(storageKey);
+    if (stored) {
+      try {
+        return JSON.parse(stored);
+      } catch (e) {
+        console.error('Failed to parse transactions from localStorage:', e);
+        return [];
+      }
+    }
+    return [];
+  });
+  
+  // Log balance changes
+  useEffect(() => {
+    if (balance) {
+      console.log('[Balance Update] Balance changed:', {
+        formatted: balance.formatted,
+        symbol: balance.symbol,
+        value: balance.value.toString(),
+        timestamp: new Date().toISOString()
+      });
+    }
+  }, [balance]);
   const currentChainId = useChainId();
   const { switchChain } = useSwitchChain();
   const isOnAtoshiL2 = currentChainId === atoshiL2.id;
@@ -31,6 +58,8 @@ const App: React.FC = () => {
     privateSend,
     unshield,
     transfer,
+    bridgeDeposit,        // L1 -> L2 cross-chain bridge
+    bridgeWithdraw,       // L2 -> L1 cross-chain bridge
     recoverNotesFromChain,
     localNotes,                  // ⭐ New: local Note list (for UI rendering)
     refreshPrivateState,         // ⭐ New: call after any Note change to refresh the UI
@@ -89,14 +118,27 @@ const App: React.FC = () => {
   };
 
   const handleInitializePrivacy = async () => {
-    if (!ensureConnectedAndOnL2()) return;
-    try {
-      await initializePrivacy();
-      alert('Privacy keys initialized successfully!');
-    } catch (error) {
-      console.error('Initialization failed:', error);
-      alert('Initialization failed, please try again: ' + (error as any)?.message);
+    if (!ensureConnectedAndOnL2()) {
+      // Caller (SetupPrivacy) expects this to throw on failure so it can
+      // reset its loading state. Throw a clear error instead of silently
+      // returning here, otherwise the UI shows "Keys Secured" after a
+      // wallet rejection.
+      throw new Error('Please connect your wallet first and switch to the Atoshi L2 chain (chain 67890)');
     }
+    // No try/catch here — let SetupPrivacy's own catch handle UI state
+    // (it shows an alert + resets back to the "start" step). Wrapping
+    // it here was swallowing the error and falsely advancing the wizard
+    // to step='success' (the "Keys Secured" green badge) even when the
+    // user clicked "reject" on the MetaMask signature prompt.
+    await initializePrivacy();
+  };
+
+  // Clear transaction history for current address
+  const handleClearHistory = () => {
+    if (!address) return;
+    setTransactions([]);
+    const storageKey = `transactions_${address.toLowerCase()}`;
+    localStorage.removeItem(storageKey);
   };
 
   const onConfirmAction = async (amount: string, to: string) => {
@@ -116,31 +158,43 @@ const App: React.FC = () => {
         case TransactionType.PRIVATE_SEND:
           tx = await privateSend(amount, to);
           break;
+        case TransactionType.BRIDGE_DEPOSIT:
+          tx = await bridgeDeposit(amount);
+          break;
+        case TransactionType.BRIDGE_WITHDRAW:
+          tx = await bridgeWithdraw(amount);
+          break;
         default:
           throw new Error('Unknown action type');
       }
 
-      setTransactions([tx, ...transactions]);
+      // Add new transaction and limit to MAX count
+      const MAX_TRANSACTIONS = 200;
+      const updatedTransactions = [tx, ...transactions].slice(0, MAX_TRANSACTIONS);
+      setTransactions(updatedTransactions);
+      
+      // Persist to localStorage (isolated by address)
+      if (address) {
+        const storageKey = `transactions_${address.toLowerCase()}`;
+        localStorage.setItem(storageKey, JSON.stringify(updatedTransactions));
+      }
       closeModal();
+      
+      console.log('[Balance Refresh] Transaction completed, starting balance refresh...');
+      console.log('[Balance Refresh] Current balance before refetch:', balance);
+      
+      // Refresh balance after successful transaction
+      await refetchBalance();
+      
+      console.log('[Balance Refresh] Balance refetched successfully');
+      console.log('[Balance Refresh] New balance after refetch:', balance);
+      
       alert('Transaction successful!');
     } catch (error) {
       console.error('Transaction failed:', error);
       alert(`Transaction failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
-
-  // If no wallet is connected, show the connect button
-  if (!isConnected) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold mb-4">Atoshi Privacy Wallet</h1>
-          <p className="text-slate-600 mb-8">Connect your wallet to start using privacy features</p>
-          <ConnectButton />
-        </div>
-      </div>
-    );
-  }
 
   // Build the wallet object
   const walletState = {
@@ -155,6 +209,24 @@ const App: React.FC = () => {
       <div className="max-w-md mx-auto min-h-screen flex flex-col shadow-2xl relative overflow-hidden bg-inherit">
         <div className={`absolute top-[-10%] left-[-20%] w-[300px] h-[300px] rounded-full blur-[100px] opacity-20 transition-all duration-700 ${activeAsset === AssetType.PUBLIC ? 'bg-blue-400' : 'bg-purple-600'}`} />
         <div className={`absolute bottom-[-10%] right-[-20%] w-[300px] h-[300px] rounded-full blur-[100px] opacity-20 transition-all duration-700 ${activeAsset === AssetType.PUBLIC ? 'bg-indigo-300' : 'bg-pink-600'}`} />
+
+        {/* Wallet connection banner - shown only when not connected */}
+        {!isConnected && (
+          <div className="mx-4 mt-4 z-10 bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/30 rounded-2xl p-6 backdrop-blur-sm">
+            <div className="text-center space-y-4">
+              <div className="inline-block p-4 bg-blue-500/20 rounded-full">
+                <Shield size={32} className="text-blue-500" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold mb-1">Welcome to Atoshi Privacy</h2>
+                <p className="text-xs opacity-70">Connect your wallet to access privacy features</p>
+              </div>
+              <div className="flex justify-center pt-2">
+                <ConnectButton />
+              </div>
+            </div>
+          </div>
+        )}
 
         <Header wallet={walletState} activeAsset={activeAsset} />
 
@@ -212,8 +284,15 @@ const App: React.FC = () => {
             {activeAsset === AssetType.PUBLIC ? (
               <PublicDashboard 
                 wallet={walletState} 
-                transactions={transactions.filter(t => [TransactionType.TRANSFER, TransactionType.SHIELD, TransactionType.UNSHIELD].includes(t.type))} 
+                transactions={transactions.filter(t => [
+                  TransactionType.TRANSFER, 
+                  TransactionType.SHIELD, 
+                  TransactionType.UNSHIELD,
+                  TransactionType.BRIDGE_DEPOSIT,
+                  TransactionType.BRIDGE_WITHDRAW
+                ].includes(t.type))} 
                 onAction={handleAction}
+                onClearHistory={handleClearHistory}
               />
             ) : (
               !wallet.privacyKeys.isInitialized ? (
@@ -235,6 +314,7 @@ const App: React.FC = () => {
                     transactions={transactions.filter(t => [TransactionType.PRIVATE_SEND, TransactionType.SHIELD, TransactionType.UNSHIELD].includes(t.type))}
                     notes={localNotes}
                     onAction={handleAction}
+                    onClearHistory={handleClearHistory}
                   />
                 </>
               )

@@ -6,11 +6,12 @@ import PublicDashboard from './components/PublicDashboard';
 import PrivateDashboard from './components/PrivateDashboard';
 import ActionModal from './components/ActionModal';
 import SetupPrivacy from './components/SetupPrivacy';
-import { History, Send, Shield } from 'lucide-react';
+import Toast from './components/Toast';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount, useBalance, useChainId, useSwitchChain } from 'wagmi';
 import { atoshiL2 } from './wagmi.config';
 import { useWallet } from './hooks/useWallet';
+import { Shield } from 'lucide-react';
 
 const App: React.FC = () => {
   const [activeAsset, setActiveAsset] = useState<AssetType>(AssetType.PUBLIC);
@@ -44,6 +45,31 @@ const App: React.FC = () => {
     return [];
   });
   
+  // Reload transactions when address changes
+  useEffect(() => {
+    if (!address) {
+      setTransactions([]);
+      return;
+    }
+    
+    const storageKey = `transactions_${address.toLowerCase()}`;
+    const stored = localStorage.getItem(storageKey);
+    
+    if (stored) {
+      try {
+        const loadedTransactions = JSON.parse(stored);
+        console.log(`[Address Change] Loaded ${loadedTransactions.length} transactions for ${address}`);
+        setTransactions(loadedTransactions);
+      } catch (e) {
+        console.error('Failed to parse transactions from localStorage:', e);
+        setTransactions([]);
+      }
+    } else {
+      console.log(`[Address Change] No transactions found for ${address}`);
+      setTransactions([]);
+    }
+  }, [address]);
+  
   // Log balance changes
   useEffect(() => {
     if (balance) {
@@ -74,20 +100,25 @@ const App: React.FC = () => {
   } = useWallet();
 
   const [isRecovering, setIsRecovering] = useState(false);
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
 
   const handleRecoverNotes = async () => {
     if (!ensureConnectedAndOnL2()) return;
     if (!wallet.privacyKeys?.isInitialized) {
-      alert('Please initialize your privacy identity first (click "Setup Privacy")');
+      setToastMessage('Please initialize your privacy identity first (click "Setup Privacy")');
+      setShowToast(true);
       return;
     }
     setIsRecovering(true);
     try {
       const recovered = await recoverNotesFromChain();
-      alert(`Scan complete, recovered ${recovered.length} Note(s)`);
+      setToastMessage(`Scan complete, recovered ${recovered.length} Note(s)`);
+      setShowToast(true);
     } catch (e: any) {
       console.error('Recovery failed:', e);
-      alert('Recovery failed: ' + (e?.message || e));
+      setToastMessage('Recovery failed: ' + (e?.message || e));
+      setShowToast(true);
     } finally {
       setIsRecovering(false);
     }
@@ -96,7 +127,8 @@ const App: React.FC = () => {
   // General precondition check: connected + on the Atoshi L2 chain. Returns false if it fails (a prompt has already been shown)
   const ensureConnectedAndOnL2 = (): boolean => {
     if (!isConnected) {
-      alert('Please connect your wallet first!');
+      setToastMessage('Please connect your wallet first!');
+      setShowToast(true);
       return false;
     }
     if (!isOnAtoshiL2) {
@@ -126,19 +158,16 @@ const App: React.FC = () => {
   };
 
   const handleInitializePrivacy = async () => {
-    if (!ensureConnectedAndOnL2()) {
-      // Caller (SetupPrivacy) expects this to throw on failure so it can
-      // reset its loading state. Throw a clear error instead of silently
-      // returning here, otherwise the UI shows "Keys Secured" after a
-      // wallet rejection.
-      throw new Error('Please connect your wallet first and switch to the Atoshi L2 chain (chain 67890)');
+    if (!ensureConnectedAndOnL2()) return;
+    try {
+      await initializePrivacy();
+      setToastMessage('Privacy keys initialized successfully!');
+      setShowToast(true);
+    } catch (error) {
+      console.error('Initialization failed:', error);
+      setToastMessage('Initialization failed: ' + (error as any)?.message);
+      setShowToast(true);
     }
-    // No try/catch here — let SetupPrivacy's own catch handle UI state
-    // (it shows an alert + resets back to the "start" step). Wrapping
-    // it here was swallowing the error and falsely advancing the wizard
-    // to step='success' (the "Keys Secured" green badge) even when the
-    // user clicked "reject" on the MetaMask signature prompt.
-    await initializePrivacy();
   };
 
   // Clear transaction history for current address
@@ -197,10 +226,14 @@ const App: React.FC = () => {
       console.log('[Balance Refresh] Balance refetched successfully');
       console.log('[Balance Refresh] New balance after refetch:', balance);
       
-      alert('Transaction successful!');
+      // Show success toast instead of alert
+      console.log('[Transaction] Showing success toast...');
+      setToastMessage('Transaction successful!');
+      setShowToast(true);
     } catch (error) {
       console.error('Transaction failed:', error);
-      alert(`Transaction failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setToastMessage(`Transaction failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setShowToast(true);
     }
   };
 
@@ -254,7 +287,11 @@ const App: React.FC = () => {
                   // Use wallet_addEthereumChain to force-add and switch the chain
                   // This is more reliable than useSwitchChain:
                   //   useSwitchChain fails when the chain doesn't exist, whereas this adds it first and then switches
-                  if (!(window as any).ethereum) return alert('No wallet extension detected');
+                  if (!(window as any).ethereum) {
+                    setToastMessage('No wallet extension detected');
+                    setShowToast(true);
+                    return;
+                  }
                   try {
                     await (window as any).ethereum.request({
                       method: 'wallet_addEthereumChain',
@@ -267,7 +304,8 @@ const App: React.FC = () => {
                       }],
                     });
                   } catch (e: any) {
-                    alert('Failed to add: ' + (e?.message || e));
+                    setToastMessage('Failed to add: ' + (e?.message || e));
+                    setShowToast(true);
                   }
                 }}
                 className="flex-1 px-3 py-2 rounded-lg bg-amber-500 text-zinc-900 text-[10px] font-bold uppercase tracking-widest hover:bg-amber-400"
@@ -285,7 +323,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        <main className="flex-1 px-6 pt-4 pb-24 z-10">
+        <main className="flex-1 px-6 pt-4 pb-8 z-10">
           <AssetToggle activeAsset={activeAsset} setActiveAsset={setActiveAsset} />
           
           <div className="mt-8">
@@ -330,37 +368,6 @@ const App: React.FC = () => {
           </div>
         </main>
 
-        <nav className={`fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md glass-dark px-8 py-4 flex justify-between items-center rounded-t-3xl border-t z-50 ${activeAsset === AssetType.PUBLIC ? 'border-slate-200' : 'border-zinc-800'}`}>
-          <button 
-             disabled={activeAsset === AssetType.PRIVATE && !wallet.privacyKeys.isInitialized}
-             onClick={() => handleAction(activeAsset === AssetType.PUBLIC ? TransactionType.TRANSFER : TransactionType.PRIVATE_SEND)}
-             className={`flex flex-col items-center gap-1 transition-all hover:scale-105 disabled:opacity-30 ${activeAsset === AssetType.PUBLIC ? 'text-blue-600' : 'text-purple-400'}`}>
-            <div className={`p-3 rounded-2xl ${activeAsset === AssetType.PUBLIC ? 'bg-blue-50' : 'bg-purple-500/10'}`}>
-              <Send size={24} />
-            </div>
-            <span className="text-[10px] font-bold uppercase tracking-wider">Send</span>
-          </button>
-
-          <button 
-             disabled={activeAsset === AssetType.PRIVATE && !wallet.privacyKeys.isInitialized}
-             onClick={() => handleAction(activeAsset === AssetType.PUBLIC ? TransactionType.SHIELD : TransactionType.UNSHIELD)}
-             className={`flex flex-col items-center gap-1 -translate-y-4 transition-all hover:scale-110 disabled:opacity-30`}>
-            <div className={`p-5 rounded-full shadow-lg ${activeAsset === AssetType.PUBLIC ? 'public-gradient text-white' : 'privacy-gradient text-white'}`}>
-              <Shield size={32} />
-            </div>
-            <span className={`text-[10px] font-black uppercase tracking-widest mt-1 ${activeAsset === AssetType.PUBLIC ? 'text-blue-600' : 'text-purple-400'}`}>
-              {activeAsset === AssetType.PUBLIC ? 'Shield' : 'Unshield'}
-            </span>
-          </button>
-
-          <button className={`flex flex-col items-center gap-1 transition-transform hover:scale-105 ${activeAsset === AssetType.PUBLIC ? 'text-slate-400' : 'text-zinc-500'}`}>
-            <div className={`p-3 rounded-2xl ${activeAsset === AssetType.PUBLIC ? 'bg-slate-100' : 'bg-zinc-800'}`}>
-              <History size={24} />
-            </div>
-            <span className="text-[10px] font-bold uppercase tracking-wider">History</span>
-          </button>
-        </nav>
-
         {activeAction && (
           <ActionModal 
             isOpen={modalOpen} 
@@ -370,6 +377,9 @@ const App: React.FC = () => {
             onConfirm={onConfirmAction}
           />
         )}
+        
+        {/* Toast notification */}
+        <Toast message={toastMessage} isVisible={showToast} onClose={() => setShowToast(false)} />
       </div>
     </div>
   );

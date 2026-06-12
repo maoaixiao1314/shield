@@ -18,7 +18,15 @@ const App: React.FC = () => {
   const [activeAction, setActiveAction] = useState<TransactionType | null>(null);
   
   const { address, isConnected } = useAccount();
-  const { data: balance, refetch: refetchBalance } = useBalance({ address });
+  // Always query L2 balance regardless of which chain MetaMask is currently on.
+  // Without `chainId: atoshiL2.id`, useBalance follows the wallet's current
+  // chain — so right after a Bridge L1→L2 (when the wallet was switched to L1
+  // to sign bridgeAsset), the hook returns the L1 balance instead of L2,
+  // showing 0 even though funds have already auto-claimed onto L2.
+  const { data: balance, refetch: refetchBalance } = useBalance({
+    address,
+    chainId: atoshiL2.id,
+  });
   
   // Initialize transactions from localStorage (isolated by address)
   const [transactions, setTransactions] = useState<Transaction[]>(() => {

@@ -158,16 +158,23 @@ const App: React.FC = () => {
   };
 
   const handleInitializePrivacy = async () => {
-    if (!ensureConnectedAndOnL2()) return;
-    try {
-      await initializePrivacy();
-      setToastMessage('Privacy keys initialized successfully!');
-      setShowToast(true);
-    } catch (error) {
-      console.error('Initialization failed:', error);
-      setToastMessage('Initialization failed: ' + (error as any)?.message);
-      setShowToast(true);
+    if (!ensureConnectedAndOnL2()) {
+      // Caller (SetupPrivacy) expects this to throw on failure so it can
+      // reset its loading state. Throw a clear error instead of silently
+      // returning here, otherwise the UI shows "Keys Secured" after a
+      // wallet rejection.
+      throw new Error('Please connect your wallet first and switch to the Atoshi L2 chain (chain 67890)');
     }
+    // No try/catch here — SetupPrivacy.startDerivation needs the error to
+    // propagate so it can catch and reset step='success' back to 'start'.
+    // Wrapping it here was swallowing the error and falsely advancing the
+    // wizard to step='success' (the "KEYS SECURED" green badge) even when
+    // the user clicked "reject" on the MetaMask signature prompt.
+    //
+    // Success path: SetupPrivacy renders its own "KEYS SECURED" step UI on
+    // success, no Toast needed here. Failure path: SetupPrivacy's catch
+    // shows an alert + resets to 'start'.
+    await initializePrivacy();
   };
 
   // Clear transaction history for current address

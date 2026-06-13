@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { WalletState, Transaction, TransactionType } from '../types';
 import { Ghost, ShieldX, Sparkles, Key, Info, ExternalLink, Eye, EyeOff } from 'lucide-react';
 import HistoryItem from './HistoryItem';
@@ -24,6 +25,7 @@ interface PrivateDashboardProps {
 }
 
 const PrivateDashboard: React.FC<PrivateDashboardProps> = ({ wallet, transactions, notes, onAction, onClearHistory }) => {
+  const { t } = useTranslation();
   const [showKeys, setShowKeys] = useState(false);
   const [viewingPrivacyKey, setViewingPrivacyKey] = useState(false);
 
@@ -32,14 +34,14 @@ const PrivateDashboard: React.FC<PrivateDashboardProps> = ({ wallet, transaction
       <div className="text-center relative">
         <div className="absolute inset-0 blur-3xl opacity-20 bg-purple-500 -z-10 animate-pulse" />
         <h3 className="text-zinc-500 text-sm font-medium uppercase tracking-widest mb-1 flex items-center justify-center gap-2">
-          <Ghost size={14} /> Shielded Assets
+          <Ghost size={14} /> {t('shieldedAssets')}
         </h3>
         <h1 className="text-5xl font-black text-white tracking-tight flex items-center justify-center gap-2">
           {wallet.privateBalance}
         </h1>
         <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 bg-zinc-900 rounded-full border border-zinc-800">
           <Sparkles size={12} className="text-yellow-400" />
-          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-tighter">Deterministic ZK-Keys Active</span>
+          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-tighter">{t('deterministicZKKeys')}</span>
         </div>
       </div>
 
@@ -51,7 +53,7 @@ const PrivateDashboard: React.FC<PrivateDashboardProps> = ({ wallet, transaction
           <div className="p-3 bg-purple-500/10 text-purple-400 rounded-full mb-2 group-hover:scale-110 transition-transform">
             <Ghost size={24} />
           </div>
-          <span className="text-sm font-bold text-zinc-200">Shielded Send</span>
+          <span className="text-sm font-bold text-zinc-200">{t('shieldedSend')}</span>
         </button>
 
         <button 
@@ -61,7 +63,7 @@ const PrivateDashboard: React.FC<PrivateDashboardProps> = ({ wallet, transaction
           <div className="p-3 bg-pink-500/10 text-pink-400 rounded-full mb-2 group-hover:scale-110 transition-transform">
             <ShieldX size={24} />
           </div>
-          <span className="text-sm font-bold text-zinc-200">Unshield</span>
+          <span className="text-sm font-bold text-zinc-200">{t('unshield')}</span>
         </button>
       </div>
 
@@ -73,24 +75,23 @@ const PrivateDashboard: React.FC<PrivateDashboardProps> = ({ wallet, transaction
         >
           <div className="flex items-center gap-3">
              <Key size={18} className="text-purple-400" />
-             <span className="text-xs font-bold uppercase tracking-wider text-zinc-300">Privacy Key Info</span>
+             <span className="text-xs font-bold uppercase tracking-wider text-zinc-300">{t('privacyKeyInfo')}</span>
           </div>
           <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest bg-zinc-800 px-2 py-1 rounded">
-            {showKeys ? 'Hide' : 'Manage'}
+            {showKeys ? t('hide') : t('manage')}
           </div>
         </button>
 
         {showKeys && (
           <div className="p-4 pt-0 space-y-4 animate-in slide-in-from-top-2 duration-300">
             <p className="text-[10px] text-zinc-500 leading-relaxed italic">
-              These keys are deterministically generated from your ETH signature. 
-              Anyone with access to your ETH wallet can regenerate these privacy keys.
+              {t('keyInfoDesc')}
             </p>
             
             <div className="space-y-2">
               <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800 flex justify-between items-center">
                 <div className="flex flex-col">
-                  <span className="text-[9px] font-black uppercase text-purple-500 tracking-tighter">Spending Key</span>
+                  <span className="text-[9px] font-black uppercase text-purple-500 tracking-tighter">{t('spendingKey')}</span>
                   <span className="text-xs mono text-zinc-400">
                     {viewingPrivacyKey ? wallet.privacyKeys.spendingKey : '••••••••••••••••••••'}
                   </span>
@@ -102,7 +103,7 @@ const PrivateDashboard: React.FC<PrivateDashboardProps> = ({ wallet, transaction
 
               <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800 flex justify-between items-center">
                 <div className="flex flex-col">
-                  <span className="text-[9px] font-black uppercase text-pink-500 tracking-tighter">Viewing Key</span>
+                  <span className="text-[9px] font-black uppercase text-pink-500 tracking-tighter">{t('viewingKey')}</span>
                   <span className="text-xs mono text-zinc-400">
                     {viewingPrivacyKey ? wallet.privacyKeys.viewingKey : '••••••••••••••••••••'}
                   </span>
@@ -121,7 +122,7 @@ const PrivateDashboard: React.FC<PrivateDashboardProps> = ({ wallet, transaction
             {/* My privacy receiving code — used by others to transfer to me */}
             {(wallet.privacyKeys as any).receivingCode && (
               <div className="mt-3 bg-zinc-950 p-4 rounded-xl border border-zinc-800">
-                <span className="text-[9px] font-black uppercase text-emerald-500 tracking-tighter">My Privacy Receiving Code (for others to transfer to me)</span>
+                <span className="text-[9px] font-black uppercase text-emerald-500 tracking-tighter">{t('myReceivingCode')}</span>
 
                 {/* QR code - the primary sharing method, the other party just scans it */}
                 <div className="mt-3 flex justify-center bg-zinc-950 p-3 rounded-lg">
@@ -130,7 +131,7 @@ const PrivateDashboard: React.FC<PrivateDashboardProps> = ({ wallet, transaction
 
                 {/* Also provide plain text (suitable for pasting into IM/email) */}
                 <details className="mt-3">
-                  <summary className="text-[10px] text-zinc-500 cursor-pointer hover:text-zinc-300">▸ Show text format (for pasting into chat apps)</summary>
+                  <summary className="text-[10px] text-zinc-500 cursor-pointer hover:text-zinc-300">▸ {t('showTextFormat')}</summary>
                   <div className="mt-2 break-all text-[10px] font-mono text-zinc-400 bg-zinc-900 p-2 rounded max-h-32 overflow-y-auto">
                     {(wallet.privacyKeys as any).receivingCode}
                   </div>
@@ -139,11 +140,11 @@ const PrivateDashboard: React.FC<PrivateDashboardProps> = ({ wallet, transaction
                 <button
                   onClick={() => {
                     navigator.clipboard.writeText((wallet.privacyKeys as any).receivingCode);
-                    alert('Receiving code copied! Send it to the other party, and they can paste it when doing a "Shielded Send" (or scan the QR code above)');
+                    alert(t('receivingCodeCopied'));
                   }}
                   className="mt-3 w-full py-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-500/20 transition-colors"
                 >
-                  📋 Copy Receiving Code to Clipboard
+                  {t('copyReceivingCode')}
                 </button>
               </div>
             )}
@@ -154,16 +155,16 @@ const PrivateDashboard: React.FC<PrivateDashboardProps> = ({ wallet, transaction
       {/* ⭐ Changed to Note list: shows amount/status/leafIndex of all Notes in the local pool */}
       <div className="space-y-4">
         <div className="flex justify-between items-center">
-          <h4 className="text-zinc-100 font-bold">Privacy Note List (Local)</h4>
+          <h4 className="text-zinc-100 font-bold">{t('privacyNoteList')}</h4>
           <span className="text-[10px] text-zinc-500 uppercase tracking-widest">
-            Available {notes.filter(n => !n.spent).length} / Total {notes.length}
+            {t('available')} {notes.filter(n => !n.spent).length} / {t('total')} {notes.length}
           </span>
         </div>
 
         <div className="space-y-2">
           {notes.length === 0 ? (
             <div className="py-12 text-center text-zinc-600 italic text-sm">
-              No Notes yet. Shield a transaction, or click "🔄 Recover NOTE from chain" to sync.
+              {t('noNotesYet')}
             </div>
           ) : (
             notes
@@ -197,12 +198,12 @@ const PrivateDashboard: React.FC<PrivateDashboardProps> = ({ wallet, transaction
                         </span>
                         {note.spent && (
                           <span className="text-[9px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 uppercase tracking-widest">
-                            Spent
+                            {t('spent')}
                           </span>
                         )}
                         {!note.spent && note.leafIndex < 0 && (
                           <span className="text-[9px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 uppercase tracking-widest">
-                            Pending Sync
+                            {t('pendingSync')}
                           </span>
                         )}
                       </div>
@@ -222,17 +223,17 @@ const PrivateDashboard: React.FC<PrivateDashboardProps> = ({ wallet, transaction
       {transactions.length > 0 && (
         <div className="space-y-4 mt-6">
           <div className="flex justify-between items-center">
-            <h4 className="text-zinc-100 font-bold">This Session's Transaction Records</h4>
+            <h4 className="text-zinc-100 font-bold">{t('sessionTransactions')}</h4>
             {onClearHistory && (
               <button 
                 onClick={() => {
-                  if (window.confirm('Are you sure you want to clear all transaction history?')) {
+                  if (window.confirm(t('clearHistoryConfirm'))) {
                     onClearHistory();
                   }
                 }}
                 className="text-red-500 text-xs font-bold uppercase hover:underline"
               >
-                Clear History
+                {t('clearHistory')}
               </button>
             )}
           </div>

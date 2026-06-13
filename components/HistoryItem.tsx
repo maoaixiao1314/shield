@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Transaction, TransactionType } from '../types';
 import { ArrowUpRight, ArrowDownLeft, Shield, Ghost, Info } from 'lucide-react';
 import Toast from './Toast';
@@ -10,6 +11,7 @@ interface HistoryItemProps {
 }
 
 const HistoryItem: React.FC<HistoryItemProps> = ({ tx, isPrivate }) => {
+  const { t } = useTranslation();
   const [showToast, setShowToast] = useState(false);
 
   const getIcon = () => {
@@ -31,11 +33,11 @@ const HistoryItem: React.FC<HistoryItemProps> = ({ tx, isPrivate }) => {
 
   const getLabel = () => {
     switch (tx.type) {
-      case TransactionType.TRANSFER: return 'Public Transfer';
-      case TransactionType.SHIELD: return 'Deposit (Shield)';
-      case TransactionType.UNSHIELD: return 'Withdraw (Unshield)';
-      case TransactionType.PRIVATE_SEND: return 'Shielded Transfer';
-      default: return 'Transaction';
+      case TransactionType.TRANSFER: return t('transactionType.publicTransfer');
+      case TransactionType.SHIELD: return t('transactionType.depositShield');
+      case TransactionType.UNSHIELD: return t('transactionType.withdrawUnshield');
+      case TransactionType.PRIVATE_SEND: return t('transactionType.shieldedTransfer');
+      default: return t('transactionType.transaction');
     }
   };
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AssetType, Transaction, TransactionType } from './types';
 import Header from './components/Header';
 import AssetToggle from './components/AssetToggle';
@@ -14,6 +15,7 @@ import { useWallet } from './hooks/useWallet';
 import { Shield } from 'lucide-react';
 
 const App: React.FC = () => {
+  const { t } = useTranslation();
   const [activeAsset, setActiveAsset] = useState<AssetType>(AssetType.PUBLIC);
   const [modalOpen, setModalOpen] = useState(false);
   const [activeAction, setActiveAction] = useState<TransactionType | null>(null);
@@ -106,18 +108,18 @@ const App: React.FC = () => {
   const handleRecoverNotes = async () => {
     if (!ensureConnectedAndOnL2()) return;
     if (!wallet.privacyKeys?.isInitialized) {
-      setToastMessage('Please initialize your privacy identity first (click "Setup Privacy")');
+      setToastMessage(t('initializePrivacyFirst'));
       setShowToast(true);
       return;
     }
     setIsRecovering(true);
     try {
       const recovered = await recoverNotesFromChain();
-      setToastMessage(`Scan complete, recovered ${recovered.length} Note(s)`);
+      setToastMessage(`${t('scanComplete')} ${recovered.length} ${t('note')}`);
       setShowToast(true);
     } catch (e: any) {
       console.error('Recovery failed:', e);
-      setToastMessage('Recovery failed: ' + (e?.message || e));
+      setToastMessage(`${t('recoveryFailed')}: ` + (e?.message || e));
       setShowToast(true);
     } finally {
       setIsRecovering(false);
@@ -127,14 +129,14 @@ const App: React.FC = () => {
   // General precondition check: connected + on the Atoshi L2 chain. Returns false if it fails (a prompt has already been shown)
   const ensureConnectedAndOnL2 = (): boolean => {
     if (!isConnected) {
-      setToastMessage('Please connect your wallet first!');
+      setToastMessage(t('pleaseConnectFirst'));
       setShowToast(true);
       return false;
     }
     if (!isOnAtoshiL2) {
       const ok = window.confirm(
-        `Your wallet is not currently on the Atoshi L2 chain (current chain: ${currentChainId}).\n\n` +
-        `Atoshi privacy transactions only run on L2 (chain ${atoshiL2.id}).\n` +
+        `${t('notOnAtoshiL2')} (${t('currentChain')}: ${currentChainId}).\n\n` +
+        `${t('needSwitchToL2')} ${atoshiL2.id}).\n` +
         `Switch to Atoshi L2?\n\n` +
         `(If MetaMask shows "Unknown network", please approve adding and switching)`
       );
@@ -159,21 +161,8 @@ const App: React.FC = () => {
 
   const handleInitializePrivacy = async () => {
     if (!ensureConnectedAndOnL2()) {
-      // Caller (SetupPrivacy) expects this to throw on failure so it can
-      // reset its loading state. Throw a clear error instead of silently
-      // returning here, otherwise the UI shows "Keys Secured" after a
-      // wallet rejection.
-      throw new Error('Please connect your wallet first and switch to the Atoshi L2 chain (chain 67890)');
+      throw new Error(t('connectAndSwitchL2'));
     }
-    // No try/catch here — SetupPrivacy.startDerivation needs the error to
-    // propagate so it can catch and reset step='success' back to 'start'.
-    // Wrapping it here was swallowing the error and falsely advancing the
-    // wizard to step='success' (the "KEYS SECURED" green badge) even when
-    // the user clicked "reject" on the MetaMask signature prompt.
-    //
-    // Success path: SetupPrivacy renders its own "KEYS SECURED" step UI on
-    // success, no Toast needed here. Failure path: SetupPrivacy's catch
-    // shows an alert + resets to 'start'.
     await initializePrivacy();
   };
 
@@ -235,11 +224,11 @@ const App: React.FC = () => {
       
       // Show success toast instead of alert
       console.log('[Transaction] Showing success toast...');
-      setToastMessage('Transaction successful!');
+      setToastMessage(t('transactionSuccess'));
       setShowToast(true);
     } catch (error) {
       console.error('Transaction failed:', error);
-      setToastMessage(`Transaction failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setToastMessage(`${t('transactionFailed')}: ${error instanceof Error ? error.message : t('unknownError')}`);
       setShowToast(true);
     }
   };
@@ -266,8 +255,8 @@ const App: React.FC = () => {
                 <Shield size={32} className="text-blue-500" />
               </div>
               <div>
-                <h2 className="text-lg font-bold mb-1">Welcome to Atoshi Privacy</h2>
-                <p className="text-xs opacity-70">Connect your wallet to access privacy features</p>
+                <h2 className="text-lg font-bold mb-1">{t('welcomeTitle')}</h2>
+                <p className="text-xs opacity-70">{t('welcomeSubtitle')}</p>
               </div>
               <div className="flex justify-center pt-2">
                 <ConnectButton />
@@ -281,21 +270,18 @@ const App: React.FC = () => {
         {/* Global warning banner: wallet connected but not on the Atoshi L2 chain, shown continuously until the chain is switched */}
         {isConnected && !isOnAtoshiL2 && (
           <div className="mx-4 mt-2 z-10 bg-amber-500/10 border border-amber-500/40 rounded-xl p-3 text-xs">
-            <p className="font-bold text-amber-400">⚠️ Not currently on the Atoshi L2 chain</p>
+            <p className="font-bold text-amber-400">⚠️ {t('notOnAtoshiL2')}</p>
             <p className="text-amber-200/80 mt-1">
-              Current chain: {currentChainId} → need to switch to Atoshi L2 (chain {atoshiL2.id})
+              {t('currentChain')}: {currentChainId} → {t('needSwitchToL2')} {atoshiL2.id})
             </p>
             <p className="text-amber-200/60 mt-2 text-[10px]">
-              💡 If MetaMask has never added Atoshi L2, clicking the button below will add it automatically.
+              {t('addNetworkTip')}
             </p>
             <div className="mt-2 flex gap-2">
               <button
                 onClick={async () => {
-                  // Use wallet_addEthereumChain to force-add and switch the chain
-                  // This is more reliable than useSwitchChain:
-                  //   useSwitchChain fails when the chain doesn't exist, whereas this adds it first and then switches
                   if (!(window as any).ethereum) {
-                    setToastMessage('No wallet extension detected');
+                    setToastMessage(t('noWalletDetected'));
                     setShowToast(true);
                     return;
                   }
@@ -311,20 +297,20 @@ const App: React.FC = () => {
                       }],
                     });
                   } catch (e: any) {
-                    setToastMessage('Failed to add: ' + (e?.message || e));
+                    setToastMessage(`${t('failedToAdd')}: ` + (e?.message || e));
                     setShowToast(true);
                   }
                 }}
                 className="flex-1 px-3 py-2 rounded-lg bg-amber-500 text-zinc-900 text-[10px] font-bold uppercase tracking-widest hover:bg-amber-400"
               >
-                ➕ Add and switch to Atoshi L2
+                {t('addAndSwitch')}
               </button>
               <button
                 onClick={() => switchChain && switchChain({ chainId: atoshiL2.id })}
                 className="px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-300 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-700"
                 title="Switch only (use this if the chain has already been added)"
               >
-                Switch
+                {t('switch')}
               </button>
             </div>
           </div>

@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { WalletState, PrivacyKeys } from '../types';
 import { Fingerprint, Loader2, Sparkles, Binary, Key, ChevronRight } from 'lucide-react';
 
@@ -9,6 +10,7 @@ interface SetupPrivacyProps {
 }
 
 const SetupPrivacy: React.FC<SetupPrivacyProps> = ({ wallet, onInitialize }) => {
+  const { t } = useTranslation();
   const [step, setStep] = useState<'start' | 'signing' | 'deriving' | 'success'>('start');
   const [progress, setProgress] = useState(0);
 
@@ -28,7 +30,7 @@ const SetupPrivacy: React.FC<SetupPrivacyProps> = ({ wallet, onInitialize }) => 
       setStep('success');
     } catch (error) {
       console.error('Key derivation failed:', error);
-      alert(`Initialization failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      alert(`${t('initFailed')}: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setStep('start');
       setProgress(0);
     }
@@ -47,10 +49,9 @@ const SetupPrivacy: React.FC<SetupPrivacyProps> = ({ wallet, onInitialize }) => 
         </div>
 
         <div className="space-y-1">
-          <h2 className="text-xl font-black tracking-tight">Activate Privacy Layer</h2>
+          <h2 className="text-xl font-black tracking-tight">{t('activatePrivacy')}</h2>
           <p className="text-xs text-zinc-500 px-4 leading-relaxed">
-            Deterministically derive your ZK-Keys using your ETH address. 
-            No mnemonic needed — just one signature.
+            {t('deriveDesc')}
           </p>
         </div>
 
@@ -59,7 +60,7 @@ const SetupPrivacy: React.FC<SetupPrivacyProps> = ({ wallet, onInitialize }) => 
             onClick={startDerivation}
             className="w-full py-4 privacy-gradient text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl flex items-center justify-center gap-2"
           >
-            Sign to Derive Keys
+            {t('signToDerive')}
             <ChevronRight size={18} />
           </button>
         )}
@@ -68,7 +69,7 @@ const SetupPrivacy: React.FC<SetupPrivacyProps> = ({ wallet, onInitialize }) => 
           <div className="space-y-3 pt-2">
             <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-tighter text-zinc-400">
               <span className="flex items-center gap-1.5">
-                {step === 'signing' ? 'Awaiting Signature...' : 'Poseidon Hashing...'}
+                {step === 'signing' ? t('awaitingSignature') : t('poseidonHashing')}
               </span>
               <span>{progress}%</span>
             </div>
@@ -90,29 +91,29 @@ const SetupPrivacy: React.FC<SetupPrivacyProps> = ({ wallet, onInitialize }) => 
              <div className="p-3 bg-green-500/10 rounded-full">
                <Key size={32} />
              </div>
-             <span className="text-sm font-black uppercase tracking-widest">Keys Secured</span>
+             <span className="text-sm font-black uppercase tracking-widest">{t('keysSecured')}</span>
           </div>
         )}
       </div>
 
       <div className="bg-zinc-950 border border-zinc-800/50 rounded-2xl p-4">
         <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-600 mb-3 flex items-center gap-2">
-          <Binary size={12} /> Architecture Mapping
+          <Binary size={12} /> {t('architectureMapping')}
         </h4>
         <div className="space-y-3">
           <div className="flex items-center gap-3">
             <div className="w-6 h-6 rounded bg-zinc-800 flex items-center justify-center text-[10px] font-bold text-zinc-400">1</div>
-            <div className="flex-1 text-[11px] text-zinc-400">ETH Master Key (0x...f321)</div>
+            <div className="flex-1 text-[11px] text-zinc-400">{t('ethMasterKey')} (0x...f321)</div>
           </div>
           <div className="h-4 w-px bg-zinc-800 ml-3" />
           <div className="flex items-center gap-3">
             <div className="w-6 h-6 rounded bg-purple-900 flex items-center justify-center text-[10px] font-bold text-purple-300">2</div>
-            <div className="flex-1 text-[11px] text-zinc-400">EIP-712 Signature (Atoshi v1)</div>
+            <div className="flex-1 text-[11px] text-zinc-400">{t('eip712Signature')}</div>
           </div>
           <div className="h-4 w-px bg-zinc-800 ml-3" />
           <div className="flex items-center gap-3">
             <div className="w-6 h-6 rounded bg-pink-900 flex items-center justify-center text-[10px] font-bold text-pink-300">3</div>
-            <div className="flex-1 text-[11px] text-zinc-400 font-bold">Privacy Seed (Poseidon Output)</div>
+            <div className="flex-1 text-[11px] text-zinc-400 font-bold">{t('privacySeed')}</div>
           </div>
         </div>
       </div>

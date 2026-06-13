@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { AssetType } from '../types';
 import { Globe, ShieldCheck } from 'lucide-react';
 
@@ -9,6 +10,7 @@ interface AssetToggleProps {
 }
 
 const AssetToggle: React.FC<AssetToggleProps> = ({ activeAsset, setActiveAsset }) => {
+  const { t } = useTranslation();
   return (
     <div className="flex bg-zinc-900/10 p-1.5 rounded-2xl relative">
       <div 
@@ -26,7 +28,7 @@ const AssetToggle: React.FC<AssetToggleProps> = ({ activeAsset, setActiveAsset }
         }`}
       >
         <Globe size={18} />
-        <span className="text-sm font-bold uppercase tracking-wider">Public</span>
+        <span className="text-sm font-bold uppercase tracking-wider">{t('public')}</span>
       </button>
 
       <button 
@@ -36,7 +38,7 @@ const AssetToggle: React.FC<AssetToggleProps> = ({ activeAsset, setActiveAsset }
         }`}
       >
         <ShieldCheck size={18} />
-        <span className="text-sm font-bold uppercase tracking-wider">Private</span>
+        <span className="text-sm font-bold uppercase tracking-wider">{t('private')}</span>
       </button>
     </div>
   );

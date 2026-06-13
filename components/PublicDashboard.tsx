@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { WalletState, Transaction, TransactionType } from '../types';
 import { ArrowUpRight, ArrowDownLeft, Shield } from 'lucide-react';
 import HistoryItem from './HistoryItem';
@@ -12,10 +13,11 @@ interface PublicDashboardProps {
 }
 
 const PublicDashboard: React.FC<PublicDashboardProps> = ({ wallet, transactions, onAction, onClearHistory }) => {
+  const { t } = useTranslation();
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="text-center">
-        <h3 className="text-slate-500 text-sm font-medium uppercase tracking-widest mb-1">Public Balance</h3>
+        <h3 className="text-slate-500 text-sm font-medium uppercase tracking-widest mb-1">{t('publicBalance')}</h3>
         <h1 className="text-5xl font-black text-slate-900 tracking-tight">{wallet.publicBalance}</h1>
       </div>
 
@@ -28,7 +30,7 @@ const PublicDashboard: React.FC<PublicDashboardProps> = ({ wallet, transactions,
           <div className="p-3 bg-white/20 rounded-full mb-2 group-hover:scale-110 transition-transform">
             <ArrowDownLeft size={24} />
           </div>
-          <span className="text-sm font-bold">Deposit from Wallet</span>
+          <span className="text-sm font-bold">{t('depositFromWallet')}</span>
         </button>
 
         <button 
@@ -38,7 +40,7 @@ const PublicDashboard: React.FC<PublicDashboardProps> = ({ wallet, transactions,
           <div className="p-3 bg-white/20 rounded-full mb-2 group-hover:scale-110 transition-transform">
             <ArrowUpRight size={24} />
           </div>
-          <span className="text-sm font-bold">Withdraw to Wallet</span>
+          <span className="text-sm font-bold">{t('withdrawToWallet')}</span>
         </button>
       </div>
 
@@ -51,7 +53,7 @@ const PublicDashboard: React.FC<PublicDashboardProps> = ({ wallet, transactions,
           <div className="p-3 bg-blue-50 text-blue-600 rounded-full mb-2 group-hover:scale-110 transition-transform">
             <ArrowUpRight size={24} />
           </div>
-          <span className="text-sm font-bold text-slate-700">Send ATOSHI</span>
+          <span className="text-sm font-bold text-slate-700">{t('sendATOSHI')}</span>
         </button>
 
         <button 
@@ -61,23 +63,23 @@ const PublicDashboard: React.FC<PublicDashboardProps> = ({ wallet, transactions,
           <div className="p-3 bg-indigo-50 text-indigo-600 rounded-full mb-2 group-hover:scale-110 transition-transform">
             <Shield size={24} />
           </div>
-          <span className="text-sm font-bold text-slate-700">Shield Funds</span>
+          <span className="text-sm font-bold text-slate-700">{t('shieldFunds')}</span>
         </button>
       </div>
 
       <div className="space-y-4">
         <div className="flex justify-between items-center">
-          <h4 className="text-slate-900 font-bold">Recent Public Txs</h4>
+          <h4 className="text-slate-900 font-bold">{t('recentPublicTxs')}</h4>
           {transactions.length > 0 && onClearHistory && (
             <button 
               onClick={() => {
-                if (window.confirm('Are you sure you want to clear all transaction history?')) {
+                if (window.confirm(t('clearHistoryConfirm'))) {
                   onClearHistory();
                 }
               }}
               className="text-red-500 text-xs font-bold uppercase hover:underline"
             >
-              Clear History
+              {t('clearHistory')}
             </button>
           )}
         </div>

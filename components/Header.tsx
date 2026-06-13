@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { AssetType, WalletState } from '../types';
 import { Wallet, ShieldCheck, ShieldAlert, LogOut } from 'lucide-react';
 import { useDisconnect } from 'wagmi';
@@ -10,22 +11,13 @@ interface HeaderProps {
 }
 
 const Header: React.FC<HeaderProps> = ({ wallet, activeAsset }) => {
+  const { t } = useTranslation();
   const isPublic = activeAsset === AssetType.PUBLIC;
   const isPrivateInitialized = wallet.privacyKeys.isInitialized;
   const { disconnect } = useDisconnect();
 
   const handleDisconnect = () => {
-    if (window.confirm(
-      '⚠️ Full reset:\n\n' +
-      '1. Disconnect wallet\n' +
-      '2. Clear WalletConnect session cache\n' +
-      '3. Clear privacy keys (privacy_keys)\n' +
-      '4. Clear local Note cache (privacy_notes)\n' +
-      '5. Clear chain scan progress (last_scanned_block)\n\n' +
-      '⚠️ Note: Local Notes cannot be recovered once cleared! On-chain Notes will be re-scanned using newly derived keys ' +
-      '(if signed with EIP-712 by the same EOA, cross-device recovery will pull back all Notes belonging to you).\n\n' +
-      'Are you sure you want to continue?'
-    )) {
+    if (window.confirm(t('disconnectConfirm'))) {
       disconnect();
       // Forceful clear: wipe all of localStorage (except what other sites might use, but localhost:3000 is only ours)
       const keysToRemove: string[] = [];
@@ -46,7 +38,7 @@ const Header: React.FC<HeaderProps> = ({ wallet, activeAsset }) => {
           });
         }
       } catch {}
-      console.log(`✓ Fully cleared ${keysToRemove.length} items from localStorage + sessionStorage`);
+      console.log(`${t('fullyCleared')} ${keysToRemove.length} ${t('items')} from localStorage + sessionStorage`);
       setTimeout(() => window.location.reload(), 500);
     }
   };
@@ -56,7 +48,7 @@ const Header: React.FC<HeaderProps> = ({ wallet, activeAsset }) => {
       <div className="flex items-center gap-2 flex-shrink-0">
         <div className={`w-3 h-3 rounded-full animate-pulse ${isPublic ? 'bg-green-500' : 'bg-purple-500'}`} />
         <span className={`text-xs font-semibold tracking-wide uppercase ${isPublic ? 'text-slate-500' : 'text-zinc-400'}`}>
-          {isPublic ? 'Mainnet' : 'Privacy Layer'}
+          {isPublic ? t('mainnet') : t('privacyLayer')}
         </span>
       </div>
       
@@ -79,7 +71,7 @@ const Header: React.FC<HeaderProps> = ({ wallet, activeAsset }) => {
             ? wallet.address 
             : isPrivateInitialized 
               ? wallet.privacyKeys.publicAddress.slice(0, 12) + '...'
-              : 'Uninitialized'
+              : t('uninitialized')
           }
         </span>
       </div>
@@ -87,7 +79,7 @@ const Header: React.FC<HeaderProps> = ({ wallet, activeAsset }) => {
       <button
         onClick={handleDisconnect}
         className={`${isPublic ? 'text-slate-400 hover:text-red-500' : 'text-zinc-500 hover:text-red-400'} transition-colors flex-shrink-0`}
-        title="Disconnect wallet + clear session cache"
+        title={t('disconnectTitle')}
       >
         <LogOut size={20} />
       </button>

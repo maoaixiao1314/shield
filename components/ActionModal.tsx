@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { TransactionType, AssetType } from '../types';
 import { X, Loader2, Sparkles, ShieldCheck, QrCode } from 'lucide-react';
 import QRCodeScanner from './QRCodeScanner';
@@ -13,6 +14,7 @@ interface ActionModalProps {
 }
 
 const ActionModal: React.FC<ActionModalProps> = ({ isOpen, onClose, type, activeAsset, onConfirm }) => {
+  const { t } = useTranslation();
   const [amount, setAmount] = useState('');
   const [to, setTo] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -21,13 +23,13 @@ const ActionModal: React.FC<ActionModalProps> = ({ isOpen, onClose, type, active
 
   const getTitle = () => {
     switch (type) {
-      case TransactionType.TRANSFER: return 'Send ATOSHI';
-      case TransactionType.PRIVATE_SEND: return 'Privacy Send';
-      case TransactionType.SHIELD: return 'Shield Funds';
-      case TransactionType.UNSHIELD: return 'Unshield Funds';
-      case TransactionType.BRIDGE_DEPOSIT: return 'Deposit from Wallet';
-      case TransactionType.BRIDGE_WITHDRAW: return 'Withdraw to Wallet';
-      default: return 'Transaction';
+      case TransactionType.TRANSFER: return t('sendATOSHITitle');
+      case TransactionType.PRIVATE_SEND: return t('privacySendTitle');
+      case TransactionType.SHIELD: return t('shieldFundsTitle');
+      case TransactionType.UNSHIELD: return t('unshieldFundsTitle');
+      case TransactionType.BRIDGE_DEPOSIT: return t('depositTitle');
+      case TransactionType.BRIDGE_WITHDRAW: return t('withdrawTitle');
+      default: return t('confirm');
     }
   };
 
@@ -72,13 +74,13 @@ const ActionModal: React.FC<ActionModalProps> = ({ isOpen, onClose, type, active
         <div className="mb-6">
           <h2 className="text-2xl font-black mb-1">{getTitle()}</h2>
           <p className={`text-xs ${isDark ? 'text-zinc-500' : 'text-slate-400'}`}>
-            {isDark ? 'Using ZK-SNARK zero-knowledge proofs for privacy.' : 'Standard EVM transaction on-chain.'}
+            {isDark ? t('zkProofDesc') : t('evmTxDesc')}
           </p>
         </div>
 
         <div className="space-y-4">
           <div>
-            <label className={`block text-[10px] font-black uppercase tracking-widest mb-1.5 ${isDark ? 'text-purple-400' : 'text-blue-600'}`}>Amount</label>
+            <label className={`block text-[10px] font-black uppercase tracking-widest mb-1.5 ${isDark ? 'text-purple-400' : 'text-blue-600'}`}>{t('amount')}</label>
             <div className={`relative rounded-2xl border transition-all ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-slate-50 border-slate-200'} focus-within:ring-2 ${isDark ? 'focus-within:ring-purple-500/30' : 'focus-within:ring-blue-500/20'}`}>
               <input 
                 value={amount}
@@ -97,25 +99,25 @@ const ActionModal: React.FC<ActionModalProps> = ({ isOpen, onClose, type, active
             <div className={`p-3 rounded-2xl border ${isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-400' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
               <span className="text-[10px] font-bold uppercase tracking-widest opacity-60">
                 {type === TransactionType.BRIDGE_DEPOSIT 
-                  ? 'Deposit to' 
+                  ? t('depositTo') 
                   : type === TransactionType.BRIDGE_WITHDRAW
-                  ? 'Withdraw to'
-                  : 'Deposit to'
+                  ? t('withdrawTo')
+                  : t('depositTo')
                 }
               </span>
               <p className="mt-1 text-xs">
                 {type === TransactionType.BRIDGE_DEPOSIT 
-                  ? 'Your L2 wallet address'
+                  ? t('yourL2Address')
                   : type === TransactionType.BRIDGE_WITHDRAW
-                  ? 'Your L1 wallet address'
-                  : 'Your own privacy pool (no recipient address required)'
+                  ? t('yourL1Address')
+                  : t('yourPrivacyPool')
                 }
               </p>
             </div>
           ) : (
             <div>
               <label className={`block text-[10px] font-black uppercase tracking-widest mb-1.5 ${isDark ? 'text-purple-400' : 'text-blue-600'}`}>
-                {type === TransactionType.PRIVATE_SEND ? 'Receiver Privacy Address' : 'Receiver Address'}
+                {type === TransactionType.PRIVATE_SEND ? t('receiverPrivacyAddress') : t('receiverAddress')}
               </label>
               <div className={`relative rounded-2xl border transition-all ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-slate-50 border-slate-200'} focus-within:ring-2 ${isDark ? 'focus-within:ring-purple-500/30' : 'focus-within:ring-blue-500/20'}`}>
                 <input
@@ -123,7 +125,7 @@ const ActionModal: React.FC<ActionModalProps> = ({ isOpen, onClose, type, active
                   onChange={(e) => setTo(e.target.value)}
                   placeholder={
                     type === TransactionType.PRIVATE_SEND
-                      ? "Paste the recipient's receiving code or tap scan on the right →"
+                      ? t('pasteOrScan')
                       : (isDark ? '0x_...' : '0x...')
                   }
                   className="w-full bg-transparent p-4 pr-14 text-xs font-medium mono outline-none"
@@ -133,7 +135,7 @@ const ActionModal: React.FC<ActionModalProps> = ({ isOpen, onClose, type, active
                   <button
                     onClick={() => setShowScanner(true)}
                     className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-colors"
-                    title="Scan the recipient's QR code"
+                    title={t('scanQRCode')}
                     type="button"
                   >
                     <QrCode size={18} />
@@ -159,7 +161,7 @@ const ActionModal: React.FC<ActionModalProps> = ({ isOpen, onClose, type, active
               <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-tighter">
                 <span className="flex items-center gap-1.5">
                   <Sparkles size={12} className="text-yellow-500 animate-pulse" />
-                  Generating ZK-Proof locally
+                  {t('generatingZKProof')}
                 </span>
                 <span>{proofProgress}%</span>
               </div>
@@ -182,11 +184,11 @@ const ActionModal: React.FC<ActionModalProps> = ({ isOpen, onClose, type, active
             {isProcessing ? (
               <>
                 <Loader2 size={20} className="animate-spin" />
-                Processing...
+                {t('processing')}
               </>
             ) : (
               <>
-                Confirm {getTitle()}
+                {t('confirm')} {getTitle()}
                 <ShieldCheck size={20} />
               </>
             )}
@@ -194,12 +196,12 @@ const ActionModal: React.FC<ActionModalProps> = ({ isOpen, onClose, type, active
           
           <p className="text-[10px] text-center opacity-30 px-6 leading-relaxed">
             {type === TransactionType.BRIDGE_DEPOSIT
-              ? 'Transfer ATOSHI from your wallet to L2 for privacy transactions.'
+              ? t('transferForPrivacy')
               : type === TransactionType.BRIDGE_WITHDRAW
-              ? 'Bridge ATOSHI from L2 back to L1. This may take 1-2 hours due to ZK proof verification.'
+              ? t('bridgeWithdrawDesc')
               : isDark 
-                ? 'Funds will be moved using a nullifier circuit. No linking data will be visible to public explorers.'
-                : 'This is a public transaction. Details will be visible on-chain to anyone.'}
+                ? t('privacyTxDesc')
+                : t('publicTxDesc')}
           </p>
         </div>
       </div>

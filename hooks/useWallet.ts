@@ -294,6 +294,34 @@ export function useWallet() {
     }
 
     try {
+      // Ensure we're on L2 chain before executing transaction
+      const currentChainId = await window.ethereum.request({ method: 'eth_chainId' });
+      const l2ChainIdHex = '0x' + config.l2.chainId.toString(16);
+      
+      if (currentChainId !== l2ChainIdHex) {
+        console.log('[shield] Switching to L2 chain...');
+        try {
+          await window.ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: l2ChainIdHex }],
+          });
+        } catch (switchError: any) {
+          if (switchError.code === 4902) {
+            await window.ethereum.request({
+              method: 'wallet_addEthereumChain',
+              params: [{
+                chainId: l2ChainIdHex,
+                chainName: config.l2.name,
+                nativeCurrency: config.l2.nativeCurrency,
+                rpcUrls: [config.l2.rpcUrl],
+              }],
+            });
+          } else {
+            throw switchError;
+          }
+        }
+      }
+
       // 1. Construct the Note with real Poseidon + ECIES and encrypt it
       //    Requires spendingKey / viewingKey: recovered from wallet.privacyKeys
       const spendingKey = BigInt(wallet.privacyKeys.spendingKey);
@@ -612,6 +640,39 @@ export function useWallet() {
     if (!walletClient) throw new Error('Please connect your wallet first and switch to the Atoshi L2 chain (chain 67890)');
     if (!wallet.privacyKeys?.isInitialized) throw new Error('Please initialize your privacy identity first');
 
+    try {
+      // Ensure we're on L2 chain before executing transaction
+      const currentChainId = await window.ethereum.request({ method: 'eth_chainId' });
+      const l2ChainIdHex = '0x' + config.l2.chainId.toString(16);
+      
+      if (currentChainId !== l2ChainIdHex) {
+        console.log('[privateSend] Switching to L2 chain...');
+        try {
+          await window.ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: l2ChainIdHex }],
+          });
+        } catch (switchError: any) {
+          if (switchError.code === 4902) {
+            await window.ethereum.request({
+              method: 'wallet_addEthereumChain',
+              params: [{
+                chainId: l2ChainIdHex,
+                chainName: config.l2.name,
+                nativeCurrency: config.l2.nativeCurrency,
+                rpcUrls: [config.l2.rpcUrl],
+              }],
+            });
+          } else {
+            throw switchError;
+          }
+        }
+      }
+    } catch (switchError) {
+      console.error('[privateSend] Failed to switch to L2:', switchError);
+      throw new Error('Failed to switch to L2 chain. Please switch manually.');
+    }
+
     const amountWei = ethers.parseEther(amount);
     const spendingKey = BigInt(wallet.privacyKeys.spendingKey);
 
@@ -789,6 +850,39 @@ export function useWallet() {
     if (!walletClient) throw new Error('Please connect your wallet first and switch to the Atoshi L2 chain (chain 67890)');
     if (!wallet.privacyKeys?.isInitialized) throw new Error('Please initialize your privacy identity first');
 
+    try {
+      // Ensure we're on L2 chain before executing transaction
+      const currentChainId = await window.ethereum.request({ method: 'eth_chainId' });
+      const l2ChainIdHex = '0x' + config.l2.chainId.toString(16);
+      
+      if (currentChainId !== l2ChainIdHex) {
+        console.log('[unshield] Switching to L2 chain...');
+        try {
+          await window.ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: l2ChainIdHex }],
+          });
+        } catch (switchError: any) {
+          if (switchError.code === 4902) {
+            await window.ethereum.request({
+              method: 'wallet_addEthereumChain',
+              params: [{
+                chainId: l2ChainIdHex,
+                chainName: config.l2.name,
+                nativeCurrency: config.l2.nativeCurrency,
+                rpcUrls: [config.l2.rpcUrl],
+              }],
+            });
+          } else {
+            throw switchError;
+          }
+        }
+      }
+    } catch (switchError) {
+      console.error('[unshield] Failed to switch to L2:', switchError);
+      throw new Error('Failed to switch to L2 chain. Please switch manually.');
+    }
+
     const amountWei = ethers.parseEther(amount);
     const spendingKey = BigInt(wallet.privacyKeys.spendingKey);
 
@@ -930,6 +1024,34 @@ export function useWallet() {
     }
 
     try {
+      // Ensure we're on L2 chain before executing transaction
+      const currentChainId = await window.ethereum.request({ method: 'eth_chainId' });
+      const l2ChainIdHex = '0x' + config.l2.chainId.toString(16);
+      
+      if (currentChainId !== l2ChainIdHex) {
+        console.log('[transfer] Switching to L2 chain...');
+        try {
+          await window.ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: l2ChainIdHex }],
+          });
+        } catch (switchError: any) {
+          if (switchError.code === 4902) {
+            await window.ethereum.request({
+              method: 'wallet_addEthereumChain',
+              params: [{
+                chainId: l2ChainIdHex,
+                chainName: config.l2.name,
+                nativeCurrency: config.l2.nativeCurrency,
+                rpcUrls: [config.l2.rpcUrl],
+              }],
+            });
+          } else {
+            throw switchError;
+          }
+        }
+      }
+
       // Use Wagmi's sendTransaction
       // ⚠️ fork11 L2 only accepts Type 0 (legacy) txs, it does not accept EIP-1559 (Type 2)
       // type: 'legacy' must be set explicitly, otherwise wagmi defaults to Type 2 → "invalid sender" error
@@ -1116,12 +1238,32 @@ export function useWallet() {
     }
 
     try {
-      // Check if user is on L2 chain
+      // Check if user is on L2 chain and switch if needed
       const currentChainId = await window.ethereum.request({ method: 'eth_chainId' });
       const l2ChainIdHex = '0x' + config.l2.chainId.toString(16);
       
       if (currentChainId !== l2ChainIdHex) {
-        throw new Error('Please switch to Atoshi L2 chain first');
+        console.log('[bridgeWithdraw] Switching to L2 chain...');
+        try {
+          await window.ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: l2ChainIdHex }],
+          });
+        } catch (switchError: any) {
+          if (switchError.code === 4902) {
+            await window.ethereum.request({
+              method: 'wallet_addEthereumChain',
+              params: [{
+                chainId: l2ChainIdHex,
+                chainName: config.l2.name,
+                nativeCurrency: config.l2.nativeCurrency,
+                rpcUrls: [config.l2.rpcUrl],
+              }],
+            });
+          } else {
+            throw switchError;
+          }
+        }
       }
 
       const amountWei = ethers.parseEther(amount);

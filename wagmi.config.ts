@@ -12,10 +12,10 @@ export const atoshiL2 = defineChain({
   },
   rpcUrls: {
     default: {
-      http: [import.meta.env.VITE_L2_RPC_URL || 'http://52.76.210.218:8123'],
+      http: [import.meta.env.VITE_L2_RPC_URL || 'https://l2-rpc1-testnet.atoshi.org'],
     },
     public: {
-      http: [import.meta.env.VITE_L2_RPC_URL || 'http://52.76.210.218:8123'],
+      http: [import.meta.env.VITE_L2_RPC_URL || 'https://l2-rpc1-testnet.atoshi.org'],
     },
   },
   blockExplorers: {

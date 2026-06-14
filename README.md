@@ -27,7 +27,7 @@ npm run dev
 ```
 
 Open the URL, connect MetaMask, and switch to the **Atoshi L2** network
-(chain id `67890`, RPC `http://52.76.210.218:8123` — see `.env`).
+(chain id `67890`, RPC `https://l2-rpc1-testnet.atoshi.org` — see `.env`).
 
 ---
 
@@ -57,7 +57,7 @@ The UI may show the action but the underlying tx will not be mined.
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `VITE_L2_RPC_URL`           | Atoshi L2 RPC endpoint              | `http://52.76.210.218:8123` |
+| `VITE_L2_RPC_URL`           | Atoshi L2 RPC endpoint              | `https://l2-rpc1-testnet.atoshi.org` |
 | `VITE_L2_CHAIN_ID`          | Atoshi L2 chain id                  | `67890` |
 | `VITE_L1_RPC_URL`           | Atoshi L1 RPC (for bridge UI)       | `https://rpc-testnet.atoshi.org` |
 | `VITE_L1_CHAIN_ID`          | Atoshi L1 chain id                  | `88288` |

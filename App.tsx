@@ -134,14 +134,53 @@ const App: React.FC = () => {
       return false;
     }
     if (!isOnAtoshiL2) {
+      // Use native wallet API for better compatibility (especially on Android WebView)
+      const switchToL2 = async () => {
+        if (!(window as any).ethereum) {
+          setToastMessage(t('noWalletDetected'));
+          setShowToast(true);
+          return;
+        }
+        try {
+          const l2ChainIdHex = '0x' + atoshiL2.id.toString(16);
+          // Try to switch first
+          await (window as any).ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: l2ChainIdHex }],
+          });
+        } catch (switchError: any) {
+          // If chain doesn't exist (code 4902), add it first
+          if (switchError.code === 4902) {
+            try {
+              await (window as any).ethereum.request({
+                method: 'wallet_addEthereumChain',
+                params: [{
+                  chainId: '0x' + atoshiL2.id.toString(16),
+                  chainName: atoshiL2.name,
+                  nativeCurrency: atoshiL2.nativeCurrency,
+                  rpcUrls: ['https://l2-rpc1-testnet.atoshi.org'],
+                  blockExplorerUrls: ['http://52.76.210.218:4001'],
+                }],
+              });
+            } catch (addError: any) {
+              setToastMessage(`${t('failedToAdd')}: ` + (addError?.message || addError));
+              setShowToast(true);
+            }
+          } else {
+            setToastMessage(`Switch failed: ${switchError?.message || switchError}`);
+            setShowToast(true);
+          }
+        }
+      };
+      
       const ok = window.confirm(
         `${t('notOnAtoshiL2')} (${t('currentChain')}: ${currentChainId}).\n\n` +
         `${t('needSwitchToL2')} ${atoshiL2.id}).\n` +
         `Switch to Atoshi L2?\n\n` +
         `(If MetaMask shows "Unknown network", please approve adding and switching)`
       );
-      if (ok && switchChain) {
-        switchChain({ chainId: atoshiL2.id });
+      if (ok) {
+        switchToL2();
       }
       return false;
     }
@@ -292,7 +331,7 @@ const App: React.FC = () => {
                         chainId: '0x' + atoshiL2.id.toString(16),
                         chainName: atoshiL2.name,
                         nativeCurrency: atoshiL2.nativeCurrency,
-                        rpcUrls: ['http://52.76.210.218:8123'],
+                        rpcUrls: ['https://l2-rpc1-testnet.atoshi.org'],
                         blockExplorerUrls: ['http://52.76.210.218:4001'],
                       }],
                     });
@@ -345,7 +384,7 @@ const App: React.FC = () => {
                       disabled={isRecovering}
                       className="px-4 py-2 text-xs font-bold uppercase tracking-widest rounded-full bg-zinc-900 border border-zinc-700 text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
                     >
-                      {isRecovering ? '⏳ Scanning Notes on chain...' : '🔄 Recover Notes from chain'}
+                      {isRecovering ? t('scanningNotes') : t('recoverNotesFromChain')}
                     </button>
                   </div>
                   <PrivateDashboard

@@ -7,6 +7,23 @@ import { RainbowKitProvider } from '@rainbow-me/rainbowkit';
 import { wagmiConfig } from './wagmi.config';
 import '@rainbow-me/rainbowkit/styles.css';
 import './i18n'; // Initialize i18n
+import i18n from 'i18next';
+
+// Set page title based on current language
+const updateTitle = () => {
+  const lang = i18n.language;
+  if (lang.startsWith('zh')) {
+    document.title = 'Atoshi 隐私钱包';
+  } else {
+    document.title = 'Atoshi Privacy Wallet';
+  }
+};
+
+// Update title on initial load
+updateTitle();
+
+// Listen for language changes and update title accordingly
+i18n.on('languageChanged', updateTitle);
 
 const queryClient = new QueryClient();
 

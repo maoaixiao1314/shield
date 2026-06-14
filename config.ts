@@ -5,7 +5,7 @@
 export const config = {
   // L2 RPC configuration
   l2: {
-    rpcUrl: import.meta.env.VITE_L2_RPC_URL || 'http://52.76.210.218:8123',
+    rpcUrl: import.meta.env.VITE_L2_RPC_URL || 'https://l2-rpc1-testnet.atoshi.org',
     chainId: parseInt(import.meta.env.VITE_L2_CHAIN_ID || '67890'),
     name: 'Atoshi L2'
   },

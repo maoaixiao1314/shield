@@ -436,6 +436,10 @@ const App: React.FC = () => {
             type={activeAction} 
             activeAsset={activeAsset}
             onConfirm={onConfirmAction}
+            onShowToast={(message) => {
+              setToastMessage(message);
+              setShowToast(true);
+            }}
           />
         )}
         

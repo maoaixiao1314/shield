@@ -11,9 +11,10 @@ interface ActionModalProps {
   type: TransactionType;
   activeAsset: AssetType;
   onConfirm: (amount: string, to: string) => void;
+  onShowToast?: (message: string) => void;  // Callback to show toast from parent
 }
 
-const ActionModal: React.FC<ActionModalProps> = ({ isOpen, onClose, type, activeAsset, onConfirm }) => {
+const ActionModal: React.FC<ActionModalProps> = ({ isOpen, onClose, type, activeAsset, onConfirm, onShowToast }) => {
   const { t } = useTranslation();
   const [amount, setAmount] = useState('');
   const [to, setTo] = useState('');
@@ -33,10 +34,55 @@ const ActionModal: React.FC<ActionModalProps> = ({ isOpen, onClose, type, active
     }
   };
 
+  // Validate address format for L2 privacy transfer
+  const validateAddress = (address: string): boolean => {
+    if (!address || !address.trim()) {
+      return false;
+    }
+    
+    const trimmed = address.trim();
+    
+    // For PRIVATE_SEND, the address can be:
+    // 1. JSON format: {"ownerPubkey":"...","viewingPubKey":"0x..."}
+    // 2. Plain ownerPubkey (bigint as string)
+    if (type === TransactionType.PRIVATE_SEND) {
+      // Try to parse as JSON first
+      if (trimmed.startsWith('{')) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          return !!(parsed.ownerPubkey && parsed.viewingPubKey);
+        } catch {
+          return false;
+        }
+      }
+      // Otherwise, it should be a valid bigint (ownerPubkey)
+      try {
+        BigInt(trimmed);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    
+    // For other transaction types (TRANSFER, UNSHIELD), validate Ethereum address format
+    // Must start with 0x and have 40 hex characters
+    const ethAddressRegex = /^0x[a-fA-F0-9]{40}$/;
+    return ethAddressRegex.test(trimmed);
+  };
+
   const handleConfirm = async () => {
     // Shield, Bridge Deposit and Bridge Withdraw do not need a "to" address
     if (!amount) return;
     if (type !== TransactionType.SHIELD && type !== TransactionType.BRIDGE_DEPOSIT && type !== TransactionType.BRIDGE_WITHDRAW && !to) return;
+    
+    // Validate address format for transactions that require a recipient
+    if (type !== TransactionType.SHIELD && type !== TransactionType.BRIDGE_DEPOSIT && type !== TransactionType.BRIDGE_WITHDRAW) {
+      if (!validateAddress(to)) {
+        onShowToast?.(t('invalidAddressFormat'));
+        return;
+      }
+    }
+    
     setIsProcessing(true);
 
     try {
@@ -83,8 +129,17 @@ const ActionModal: React.FC<ActionModalProps> = ({ isOpen, onClose, type, active
             <label className={`block text-[10px] font-black uppercase tracking-widest mb-1.5 ${isDark ? 'text-purple-400' : 'text-blue-600'}`}>{t('amount')}</label>
             <div className={`relative rounded-2xl border transition-all ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-slate-50 border-slate-200'} focus-within:ring-2 ${isDark ? 'focus-within:ring-purple-500/30' : 'focus-within:ring-blue-500/20'}`}>
               <input 
+                type="text"
+                inputMode="decimal"
+                pattern="[0-9]*\.?[0-9]*"
                 value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  // Allow empty string, digits, and one decimal point
+                  if (value === '' || /^[0-9]*\.?[0-9]*$/.test(value)) {
+                    setAmount(value);
+                  }
+                }}
                 placeholder="0.00"
                 className="w-full bg-transparent p-4 text-lg font-bold outline-none"
               />

@@ -8,7 +8,7 @@ import PrivateDashboard from './components/PrivateDashboard';
 import ActionModal from './components/ActionModal';
 import SetupPrivacy from './components/SetupPrivacy';
 import Toast from './components/Toast';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
+import CustomConnectButton from './components/CustomConnectButton';
 import { useAccount, useBalance, useChainId, useSwitchChain } from 'wagmi';
 import { atoshiL2 } from './wagmi.config';
 import { useWallet } from './hooks/useWallet';
@@ -267,7 +267,26 @@ const App: React.FC = () => {
       setShowToast(true);
     } catch (error) {
       console.error('Transaction failed:', error);
-      setToastMessage(`${t('transactionFailed')}: ${error instanceof Error ? error.message : t('unknownError')}`);
+      
+      // Handle user rejection gracefully
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      let displayMessage = t('transactionFailed');
+      
+      // Check for common rejection patterns
+      if (
+        errorMessage.includes('user rejected') ||
+        errorMessage.includes('User rejected') ||
+        errorMessage.includes('rejected by user') ||
+        errorMessage.includes('ACTION_REJECTED') ||
+        errorMessage.includes('4001') // MetaMask error code for user rejection
+      ) {
+        displayMessage = t('userRefusedOperation');
+      } else {
+        // For other errors, show a simplified message
+        displayMessage = `${t('transactionFailed')}: ${errorMessage.length > 50 ? errorMessage.substring(0, 50) + '...' : errorMessage}`;
+      }
+      
+      setToastMessage(displayMessage);
       setShowToast(true);
     }
   };
@@ -298,7 +317,10 @@ const App: React.FC = () => {
                 <p className="text-xs opacity-70">{t('welcomeSubtitle')}</p>
               </div>
               <div className="flex justify-center pt-2">
-                <ConnectButton />
+                <CustomConnectButton onShowToast={(message) => {
+                  setToastMessage(message);
+                  setShowToast(true);
+                }} />
               </div>
             </div>
           </div>
@@ -374,7 +396,10 @@ const App: React.FC = () => {
               />
             ) : (
               !wallet.privacyKeys.isInitialized ? (
-                <SetupPrivacy wallet={walletState} onInitialize={handleInitializePrivacy} />
+                <SetupPrivacy wallet={walletState} onInitialize={handleInitializePrivacy} onShowToast={(message) => {
+                  setToastMessage(message);
+                  setShowToast(true);
+                }} />
               ) : (
                 <>
                   {/* Cross-device recovery entry point: scan all Deposit events on chain and use the viewingKey to decrypt Notes belonging to the user */}
@@ -393,6 +418,10 @@ const App: React.FC = () => {
                     notes={localNotes}
                     onAction={handleAction}
                     onClearHistory={handleClearHistory}
+                    onShowToast={(message) => {
+                      setToastMessage(message);
+                      setShowToast(true);
+                    }}
                   />
                 </>
               )

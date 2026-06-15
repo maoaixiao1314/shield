@@ -22,9 +22,10 @@ interface PrivateDashboardProps {
   notes: LocalNote[];                   // ⭐ Added: local Note list
   onAction: (type: TransactionType) => void;
   onClearHistory?: () => void;
+  onShowToast?: (message: string) => void;  // Callback to show toast from parent
 }
 
-const PrivateDashboard: React.FC<PrivateDashboardProps> = ({ wallet, transactions, notes, onAction, onClearHistory }) => {
+const PrivateDashboard: React.FC<PrivateDashboardProps> = ({ wallet, transactions, notes, onAction, onClearHistory, onShowToast }) => {
   const { t } = useTranslation();
   const [showKeys, setShowKeys] = useState(false);
   const [viewingPrivacyKey, setViewingPrivacyKey] = useState(false);
@@ -140,7 +141,7 @@ const PrivateDashboard: React.FC<PrivateDashboardProps> = ({ wallet, transaction
                 <button
                   onClick={() => {
                     navigator.clipboard.writeText((wallet.privacyKeys as any).receivingCode);
-                    alert(t('receivingCodeCopied'));
+                    onShowToast?.(t('receivingCodeCopied'));
                   }}
                   className="mt-3 w-full py-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-500/20 transition-colors"
                 >

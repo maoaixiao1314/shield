@@ -17,30 +17,33 @@ const Header: React.FC<HeaderProps> = ({ wallet, activeAsset }) => {
   const { disconnect } = useDisconnect();
 
   const handleDisconnect = () => {
-    if (window.confirm(t('disconnectConfirm'))) {
-      disconnect();
-      // Forceful clear: wipe all of localStorage (except what other sites might use, but localhost:3000 is only ours)
-      const keysToRemove: string[] = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key) keysToRemove.push(key);
-      }
-      for (const k of keysToRemove) localStorage.removeItem(k);
-      // Clear sessionStorage too
-      try { sessionStorage.clear(); } catch {}
-      // IndexedDB (wallet connect v2 uses this) — best effort
-      try {
-        if ((window as any).indexedDB?.databases) {
-          (window as any).indexedDB.databases().then((dbs: any[]) => {
-            dbs?.forEach((db: any) => {
-              if (db.name) (window as any).indexedDB.deleteDatabase(db.name);
-            });
-          });
-        }
-      } catch {}
-      console.log(`${t('fullyCleared')} ${keysToRemove.length} ${t('items')} from localStorage + sessionStorage`);
-      setTimeout(() => window.location.reload(), 500);
+    // Directly execute disconnect without confirmation dialog
+    disconnect();
+    
+    // Forceful clear: wipe all of localStorage (except what other sites might use, but localhost:3000 is only ours)
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key) keysToRemove.push(key);
     }
+    for (const k of keysToRemove) localStorage.removeItem(k);
+    
+    // Clear sessionStorage too
+    try { sessionStorage.clear(); } catch {}
+    
+    // IndexedDB (wallet connect v2 uses this) — best effort
+    try {
+      if ((window as any).indexedDB?.databases) {
+        (window as any).indexedDB.databases().then((dbs: any[]) => {
+          dbs?.forEach((db: any) => {
+            if (db.name) (window as any).indexedDB.deleteDatabase(db.name);
+          });
+        });
+      }
+    } catch {}
+    
+    console.log(`${t('fullyCleared')} ${keysToRemove.length} ${t('items')} from localStorage + sessionStorage`);
+    setTimeout(() => window.location.reload(), 500);
   };
   
   return (

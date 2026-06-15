@@ -156,6 +156,37 @@ export function useWallet() {
   const [signer, setSigner] = useState<ethers.Signer | null>(null);
   const [sdk] = useState(() => getPrivacySDK(config.l2.rpcUrl, config.contracts.shield));
 
+  // Helper function to check if wallet is connected and get the address
+  const ensureWalletConnected = async (): Promise<string> => {
+    // Check both wagmi's walletClient and window.ethereum for better compatibility
+    if (walletClient && walletClient.account) {
+      return walletClient.account.address;
+    }
+    
+    // Fallback: use window.ethereum directly
+    if ((window as any).ethereum) {
+      try {
+        const accounts = await (window as any).ethereum.request({ method: 'eth_accounts' });
+        if (accounts && accounts.length > 0) {
+          return accounts[0];
+        }
+      } catch (error) {
+        console.error('[ensureWalletConnected] Failed to get accounts:', error);
+      }
+    }
+    
+    throw new Error('Please connect your wallet first');
+  };
+
+  // Helper function to get current wallet address (sync version)
+  const getCurrentAddress = (): string => {
+    if (walletClient && walletClient.account) {
+      return walletClient.account.address;
+    }
+    // This will be set by ensureWalletConnected before calling this function
+    throw new Error('Wallet not connected');
+  };
+
   // Local Note state (mirrors localStorage's privacy_notes)
   // The UI reads this directly; refreshed after any shield/transfer/unshield/recover operation.
   const [localNotes, setLocalNotes] = useState<any[]>([]);
@@ -217,9 +248,7 @@ export function useWallet() {
   const initializePrivacy = async (): Promise<PrivacyKeys> => {
     console.log('initializePrivacy called');
 
-    if (!walletClient) {
-      throw new Error('Please connect your wallet first and switch to the Atoshi L2 chain (chain 67890)');
-    }
+    ensureWalletConnected();
 
     try {
       // ============================================================
@@ -289,9 +318,7 @@ export function useWallet() {
 
   // Shield (deposit)
   const shield = async (amount: string): Promise<Transaction> => {
-    if (!walletClient) {
-      throw new Error('Please connect your wallet first and switch to the Atoshi L2 chain (chain 67890)');
-    }
+    const accountAddress = await ensureWalletConnected();
 
     try {
       // Ensure we're on L2 chain before executing transaction
@@ -349,7 +376,7 @@ export function useWallet() {
       const NATIVE_TOKEN = '0x0000000000000000000000000000000000000000' as const;
       const hash = await writeContractAsync({
         chain: atoshiL2,
-        account: walletClient.account.address as `0x${string}`,
+        account: accountAddress as `0x${string}`,
         address: config.contracts.shield as `0x${string}`,
         abi: [
           {
@@ -438,13 +465,39 @@ export function useWallet() {
         amount: `${amount} ATOSHI`,
         asset: 'ATOSHI',
         timestamp: Date.now(),
-        from: walletClient.account.address,
+        from: accountAddress,
         to: wallet.privacyKeys.publicAddress,
         status: 'completed',
         txHash: hash
       };
     } catch (error) {
       console.error('Shield failed:', error);
+      
+      // Provide user-friendly error messages for ZK proof errors
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      if (errorMessage.includes('Assert Failed') || errorMessage.includes('MerkleTreeChecker')) {
+        throw new Error(
+          '零知识证明生成失败。可能原因：\n' +
+          '1. Note 的 leafIndex 不正确\n' +
+          '2. Merkle tree 状态与链上不同步\n' +
+          '3. Spending key 错误\n\n' +
+          '请尝试：\n' +
+          '• 点击“🔄 从链上恢复 Notes”同步最新状态\n' +
+          '• 重新执行屏蔽资金操作获取新的 Note'
+        );
+      }
+      
+      if (errorMessage.includes('signal is aborted') || errorMessage.includes('aborted without reason')) {
+        throw new Error(
+          '网络请求被中断。可能原因：\n' +
+          '1. RPC 节点响应超时\n' +
+          '2. 网络连接不稳定\n' +
+          '3. ZK 证明生成时间过长导致超时\n\n' +
+          '请检查网络连接后重试。'
+        );
+      }
+      
       throw error;
     }
   };
@@ -637,7 +690,7 @@ export function useWallet() {
   //
   // Security: both ownerPubkey and viewingPubKey are public values, so sharing them does not leak Bob's funds.
   const privateSend = async (amount: string, to: string): Promise<Transaction> => {
-    if (!walletClient) throw new Error('Please connect your wallet first and switch to the Atoshi L2 chain (chain 67890)');
+    const accountAddress = await ensureWalletConnected();
     if (!wallet.privacyKeys?.isInitialized) throw new Error('Please initialize your privacy identity first');
 
     try {
@@ -731,6 +784,15 @@ export function useWallet() {
     const oldNote = matchingNotes[0];
     if (oldNote.leafIndex < 0) throw new Error('The Note has no confirmed leafIndex yet; please click "🔄 Recover Notes from chain" first');
 
+    // Debug: log note details before proof generation
+    console.log('[privateSend] Using note for transfer:', {
+      commitment: oldNote.commitment.toString(),
+      amount: ethers.formatEther(oldNote.amount),
+      leafIndex: oldNote.leafIndex,
+      secret: oldNote.secret,
+      spent: oldNote.spent
+    });
+
     // 3. Construct the new Note (owner = Bob)
     const newBlinding = randomBlinding();
     const tokenId = 0n;
@@ -770,7 +832,7 @@ export function useWallet() {
     // 5. Call Shield.transfer
     const hash = await writeContractAsync({
       chain: atoshiL2,
-      account: walletClient.account.address as `0x${string}`,
+      account: accountAddress as `0x${string}`,
       address: config.contracts.shield as `0x${string}`,
       abi: [
         {
@@ -847,7 +909,7 @@ export function useWallet() {
 
   // Unshield (private → public) — real ZK proof + Shield.withdraw
   const unshield = async (amount: string, to: string): Promise<Transaction> => {
-    if (!walletClient) throw new Error('Please connect your wallet first and switch to the Atoshi L2 chain (chain 67890)');
+    const accountAddress = await ensureWalletConnected();
     if (!wallet.privacyKeys?.isInitialized) throw new Error('Please initialize your privacy identity first');
 
     try {
@@ -936,7 +998,7 @@ export function useWallet() {
     const NATIVE_TOKEN = '0x0000000000000000000000000000000000000000' as const;
     const hash = await writeContractAsync({
       chain: atoshiL2,
-      account: walletClient.account.address as `0x${string}`,
+      account: accountAddress as `0x${string}`,
       address: config.contracts.shield as `0x${string}`,
       abi: [
         {
@@ -1019,9 +1081,7 @@ export function useWallet() {
 
   // Regular transfer
   const transfer = async (amount: string, to: string): Promise<Transaction> => {
-    if (!walletClient) {
-      throw new Error('Please connect your wallet first and switch to the Atoshi L2 chain (chain 67890)');
-    }
+    const accountAddress = await ensureWalletConnected();
 
     try {
       // Ensure we're on L2 chain before executing transaction
@@ -1061,6 +1121,7 @@ export function useWallet() {
         gas: 21000n,
         gasPrice: 2_000_000_000n,  // 2 gwei (consistent with Shield/Unshield)
         type: 'legacy',             // ⭐ required for fork11
+        account: accountAddress as `0x${string}`,  // Add account parameter
       });
 
       // Wait for the transaction to be confirmed
@@ -1076,7 +1137,7 @@ export function useWallet() {
         amount: `${amount} ATOSHI`,
         asset: 'ATOSHI',
         timestamp: Date.now(),
-        from: walletClient.account.address,
+        from: accountAddress,
         to,
         status: 'completed',
         txHash: hash
@@ -1089,9 +1150,7 @@ export function useWallet() {
 
   // Bridge deposit: L1 -> L2 cross-chain transfer
   const bridgeDeposit = async (amount: string): Promise<Transaction> => {
-    if (!walletClient) {
-      throw new Error('Please connect your wallet first');
-    }
+    ensureWalletConnected();
 
     try {
       // Check if user is on L1 chain
@@ -1124,7 +1183,9 @@ export function useWallet() {
       }
 
       const amountWei = ethers.parseEther(amount);
-      const destinationAddress = walletClient.account.address;
+      // Use window.ethereum to get the connected address (more reliable than walletClient)
+      const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+      const destinationAddress = accounts[0];
 
       // Use the complete BRIDGE_ABI from JSON file
       // Create provider and signer for L1
@@ -1163,7 +1224,7 @@ export function useWallet() {
         amount: `${amount} ATOSHI`,
         asset: 'ATOSHI',
         timestamp: Date.now(),
-        from: walletClient.account.address,
+        from: destinationAddress,  // Use the address we already fetched
         to: destinationAddress,
         status: 'pending',
         txHash: receipt.hash
@@ -1233,9 +1294,7 @@ export function useWallet() {
 
   // Step 1: Call bridgeAsset on L2 to initiate withdrawal
   const bridgeWithdraw = async (amount: string): Promise<Transaction> => {
-    if (!walletClient) {
-      throw new Error('Please connect your wallet first');
-    }
+    ensureWalletConnected();
 
     try {
       // Check if user is on L2 chain and switch if needed
@@ -1267,7 +1326,9 @@ export function useWallet() {
       }
 
       const amountWei = ethers.parseEther(amount);
-      const destinationAddress = walletClient.account.address;
+      // Use window.ethereum to get the connected address (more reliable than walletClient)
+      const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+      const destinationAddress = accounts[0];
 
       // Create provider and signer for L2
       const l2Provider = new ethers.BrowserProvider(window.ethereum);
@@ -1305,7 +1366,7 @@ export function useWallet() {
         amount: `${amount} ATOSHI`,
         asset: 'ATOSHI',
         timestamp: Date.now(),
-        from: walletClient.account.address,
+        from: destinationAddress,  // Use the address we already fetched
         to: destinationAddress,
         status: 'pending',
         txHash: receipt.hash

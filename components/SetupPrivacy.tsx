@@ -7,9 +7,10 @@ import { Fingerprint, Loader2, Sparkles, Binary, Key, ChevronRight } from 'lucid
 interface SetupPrivacyProps {
   wallet: WalletState;
   onInitialize: () => Promise<void>;
+  onShowToast?: (message: string) => void;  // Callback to show toast from parent
 }
 
-const SetupPrivacy: React.FC<SetupPrivacyProps> = ({ wallet, onInitialize }) => {
+const SetupPrivacy: React.FC<SetupPrivacyProps> = ({ wallet, onInitialize, onShowToast }) => {
   const { t } = useTranslation();
   const [step, setStep] = useState<'start' | 'signing' | 'deriving' | 'success'>('start');
   const [progress, setProgress] = useState(0);
@@ -30,7 +31,7 @@ const SetupPrivacy: React.FC<SetupPrivacyProps> = ({ wallet, onInitialize }) => 
       setStep('success');
     } catch (error) {
       console.error('Key derivation failed:', error);
-      alert(`${t('initFailed')}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      onShowToast?.(`${t('initFailed')}: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setStep('start');
       setProgress(0);
     }

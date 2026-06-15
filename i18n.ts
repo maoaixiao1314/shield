@@ -7,12 +7,17 @@ const zh = {
   welcome: '欢迎',
   loading: '加载中...',
   processing: '处理中...',
+  connecting: '连接中...',
   confirm: '确认',
   cancel: '取消',
   clearHistory: '清除历史',
-  clearHistoryConfirm: '确定要清除所有交易历史吗?',
+  clearHistoryConfirm: '确定要清除所有交易历史吗？',
   public: '公开',
   private: '隐私',
+  connectWallet: '连接钱包',
+  noWalletDetected: '未检测到钱包，请使用钱包访问本应用',
+  walletConnectionFailed: '钱包连接失败',
+  connectionFailed: '连接失败',
   
   // Transaction Types (HistoryItem.tsx)
   transactionType: {
@@ -32,7 +37,6 @@ const zh = {
   addNetworkTip: '💡 如果 MetaMask 从未添加过 Atoshi L2,点击下方按钮将自动添加',
   addAndSwitch: '➕ 添加并切换到 Atoshi L2',
   switch: '切换',
-  noWalletDetected: '未检测到钱包扩展',
   failedToAdd: '添加失败',
   scanComplete: '扫描完成,已恢复',
   note: '个 Note',
@@ -42,8 +46,9 @@ const zh = {
   pleaseConnectFirst: '请先连接钱包!',
   initializePrivacyFirst: '请先初始化您的隐私身份(点击"设置隐私")',
   connectAndSwitchL2: '请先连接钱包并切换到 Atoshi L2 链(链 67890)',
-  transactionSuccess: '交易成功!',
+  transactionSuccess: '交易成功',
   transactionFailed: '交易失败',
+  userRefusedOperation: '用户拒绝了操作',
   unknownError: '未知错误',
   
   // Header.tsx
@@ -140,12 +145,17 @@ const en = {
   welcome: 'Welcome',
   loading: 'Loading...',
   processing: 'Processing...',
+  connecting: 'Connecting...',
   confirm: 'Confirm',
   cancel: 'Cancel',
   clearHistory: 'Clear History',
   clearHistoryConfirm: 'Are you sure you want to clear all transaction history?',
   public: 'Public',
   private: 'Private',
+  connectWallet: 'Connect Wallet',
+  noWalletDetected: 'No wallet detected. Please use a wallet to access this app',
+  walletConnectionFailed: 'Wallet connection failed',
+  connectionFailed: 'Connection failed',
   
   // Transaction Types (HistoryItem.tsx)
   transactionType: {
@@ -165,7 +175,6 @@ const en = {
   addNetworkTip: '💡 If MetaMask has never added Atoshi L2, clicking the button below will add it automatically.',
   addAndSwitch: '➕ Add and switch to Atoshi L2',
   switch: 'Switch',
-  noWalletDetected: 'No wallet extension detected',
   failedToAdd: 'Failed to add',
   scanComplete: 'Scan complete, recovered',
   note: 'Note(s)',
@@ -175,8 +184,9 @@ const en = {
   pleaseConnectFirst: 'Please connect your wallet first!',
   initializePrivacyFirst: 'Please initialize your privacy identity first (click "Setup Privacy")',
   connectAndSwitchL2: 'Please connect your wallet first and switch to the Atoshi L2 chain (chain 67890)',
-  transactionSuccess: 'Transaction successful!',
+  transactionSuccess: 'Transaction successful',
   transactionFailed: 'Transaction failed',
+  userRefusedOperation: 'User refused the operation',
   unknownError: 'Unknown error',
   
   // Header.tsx

@@ -16,6 +16,7 @@ import {
   ChainScanner,
   RecoveredNote,
   BN254_FIELD_SIZE,
+  computeNullifier,
 } from '@atoshi/privacy-sdk';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { hkdf } from '@noble/hashes/hkdf.js';
@@ -510,6 +511,7 @@ export function useWallet() {
       throw new Error('Please connect your wallet and sign first to derive your privacy identity');
     }
     const viewingKey = BigInt(wallet.privacyKeys.viewingKey);
+    const spendingKey = BigInt(wallet.privacyKeys.spendingKey);
 
     const provider = new ethers.JsonRpcProvider(
       config.l2.rpcUrl,
@@ -622,17 +624,60 @@ export function useWallet() {
       });
     }
 
-    // 5. Merge into local storage (deduplicated by commitment)
+    // 5. Cross-check each recovered Note's nullifier against the on-chain
+    //    spent set BEFORE inserting it into local storage.
+    //
+    //    Without this check, the recovery flow has a "fake balance" failure
+    //    mode on a fresh device / cleared cache:
+    //      - localStorage is empty → the dedupe at step 6 doesn't filter
+    //        anything → every decryptable Note from the chain (including
+    //        the ones the user already spent in past sessions) gets pushed
+    //        in with `spent: false`.
+    //      - The UI computes balance as Σ amount over `spent === false`,
+    //        so the user sees an inflated balance.
+    //      - The first attempt to spend an already-spent Note reverts on
+    //        the contract (`Shield: already spent`), but the UI lied up
+    //        to that point — bad for OTC / lending / display trust.
+    //
+    //    Fix: compute Poseidon(commitment, spendingKey, leafIndex) for each
+    //    recovered Note and query Shield.isSpent(uint256). Any Note whose
+    //    nullifier is already on-chain is stored as `spent: true` so it
+    //    stays out of the balance calculation but is still visible if a
+    //    future UI wants to render a "spent history" view.
+    const shieldRO = new ethers.Contract(
+      config.contracts.shield,
+      ['function isSpent(uint256 nullifierHash) view returns (bool)'],
+      provider,
+    );
+    const spentFlags: boolean[] = new Array(recovered.length).fill(false);
+    for (let k = 0; k < recovered.length; k++) {
+      const note = recovered[k];
+      try {
+        const nf = await computeNullifier(note.commitment, spendingKey, note.leafIndex);
+        spentFlags[k] = await shieldRO.isSpent(nf);
+      } catch (err) {
+        // If the chain query fails (transient RPC issue), fall back to
+        // `spent: false`. The user's next spend attempt will still hit
+        // the on-chain check, so we don't risk allowing a double-spend —
+        // worst case the UI shows a slightly inflated balance until the
+        // next successful recovery.
+        console.warn(`[recovery] isSpent check failed for leafIndex=${note.leafIndex}, defaulting to unspent:`, err);
+      }
+    }
+    const spentCount = spentFlags.filter(Boolean).length;
+
+    // 6. Merge into local storage (deduplicated by commitment)
     const existing = loadNotes();
     const existingCommitments = new Set(existing.map((n: any) => n.commitment));
-    for (const note of recovered) {
+    for (let k = 0; k < recovered.length; k++) {
+      const note = recovered[k];
       if (existingCommitments.has(note.commitment.toString())) continue;
       existing.push({
         amount: note.amount.toString(),
         secret: note.blinding.toString(),
         nullifier: '',
         recipient: wallet.privacyKeys.publicAddress,
-        spent: false,
+        spent: spentFlags[k],
         leafIndex: note.leafIndex,
         commitment: note.commitment.toString(),
       });
@@ -640,7 +685,11 @@ export function useWallet() {
     localStorage.setItem('privacy_notes', JSON.stringify(existing));
     localStorage.setItem('last_scanned_block', latest.toString());
     refreshPrivateState();          // ⭐ UI refreshes immediately
-    console.log(`[recovery] ${entries.length} leaf-inserting events total, recovered ${recovered.length} Notes belonging to you`);
+    console.log(
+      `[recovery] ${entries.length} leaf-inserting events total, ` +
+      `recovered ${recovered.length} Notes belonging to you ` +
+      `(${recovered.length - spentCount} unspent, ${spentCount} already spent on-chain)`,
+    );
     return recovered;
   };
 
@@ -730,33 +779,52 @@ export function useWallet() {
     const spendingKey = BigInt(wallet.privacyKeys.spendingKey);
 
     // 1. Parse Bob's receiving code
+    //
+    // ⚠️ Only the JSON receiving code is accepted. The previous fallback
+    // that treated raw bigint input as ownerPubkey is REMOVED. Pasting a
+    // 0x EVM address used to be silently accepted (BigInt('0x...') parses
+    // it as a uint256, indistinguishable in-circuit from a real hash-
+    // pubkey), the proof passed, the source note was nullified on-chain,
+    // and a new commitment was created whose owner was the EVM address —
+    // nobody has the spendingKey satisfying Poseidon(spendingKey) ==
+    // EVM_address, so the funds were permanently locked. The error users
+    // hit on the next spend attempt was "Error in template
+    // MerkleTreeChecker..." — the recovered note's commitment is re-
+    // derived with the sender's real ownerPubkey and no longer matches
+    // the on-chain commitment.
     let bobOwnerPubkey: bigint;
     let bobViewingPubKey: Uint8Array;
     try {
       const trimmed = to.trim();
-      // Supports two formats:
-      //   A) JSON: {"ownerPubkey":"...","viewingPubKey":"0x..."}
-      //   B) Simplified plain ownerPubkey (Bob hasn't shared the viewingPubKey yet, fallback to encrypting to yourself)
-      if (trimmed.startsWith('{')) {
-        const parsed = JSON.parse(trimmed);
-        if (!parsed.ownerPubkey || !parsed.viewingPubKey) {
-          throw new Error('receiving code is missing fields');
-        }
-        bobOwnerPubkey = BigInt(parsed.ownerPubkey);
-        const hex = parsed.viewingPubKey.startsWith('0x') ? parsed.viewingPubKey.slice(2) : parsed.viewingPubKey;
-        bobViewingPubKey = new Uint8Array(hex.length / 2);
-        for (let i = 0; i < bobViewingPubKey.length; i++) {
-          bobViewingPubKey[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-        }
-        if (bobViewingPubKey.length !== 32) throw new Error('viewingPubKey must be 32 bytes');
-      } else {
-        // Fallback: the old format only has ownerPubkey, so encrypt to yourself (user fallback; Bob needs the Note delivered out of band)
-        bobOwnerPubkey = BigInt(trimmed);
-        bobViewingPubKey = viewingPubKey(BigInt(wallet.privacyKeys.viewingKey));
-        console.warn('[transfer] receiving code has no viewingPubKey, encrypting to yourself (Bob will not receive a Note notification)');
+      if (!trimmed.startsWith('{')) {
+        throw new Error(
+          'Invalid receiving code. Use the JSON privacy receiving code generated by the recipient via "Setup Privacy" — NOT a 0x EVM address. Pasting an EVM address will cause permanent loss of funds.\n\nExpected format: {"ownerPubkey":"...","viewingPubKey":"0x..."}'
+        );
+      }
+      const parsed = JSON.parse(trimmed);
+      if (!parsed.ownerPubkey || !parsed.viewingPubKey) {
+        throw new Error('Receiving code is missing required fields (ownerPubkey, viewingPubKey).');
+      }
+      bobOwnerPubkey = BigInt(parsed.ownerPubkey);
+      // Reject obviously-invalid pubkey values (must be a non-zero BN254 field element)
+      const BN254_MOD = 21888242871839275222246405745257275088548364400416034343698204186575808495617n;
+      if (bobOwnerPubkey === 0n || bobOwnerPubkey >= BN254_MOD) {
+        throw new Error('ownerPubkey is not a valid BN254 field element (must be > 0 and < BN254 modulus).');
+      }
+      const hex = parsed.viewingPubKey.startsWith('0x') ? parsed.viewingPubKey.slice(2) : parsed.viewingPubKey;
+      bobViewingPubKey = new Uint8Array(hex.length / 2);
+      for (let i = 0; i < bobViewingPubKey.length; i++) {
+        bobViewingPubKey[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+      }
+      if (bobViewingPubKey.length !== 32) {
+        throw new Error('viewingPubKey must be 32 bytes.');
       }
     } catch (e: any) {
-      throw new Error(`Invalid receiving code: ${e?.message || e}`);
+      const msg = e?.message || String(e);
+      if (msg.includes('JSON') && !msg.includes('Invalid receiving code')) {
+        throw new Error(`Receiving code is not valid JSON.\n\n${msg}`);
+      }
+      throw e;
     }
 
     // 2. Pick a local Note with an equal amount

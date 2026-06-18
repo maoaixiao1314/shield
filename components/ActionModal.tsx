@@ -83,6 +83,9 @@ const ActionModal: React.FC<ActionModalProps> = ({ isOpen, onClose, type, active
       }
     }
     
+    // Prevent duplicate submissions
+    if (isProcessing) return;
+    
     setIsProcessing(true);
 
     try {
@@ -97,9 +100,13 @@ const ActionModal: React.FC<ActionModalProps> = ({ isOpen, onClose, type, active
       // until the transaction is confirmed (handled in onConfirm)
 
       await onConfirm(amount, to); // Wait for the transaction to complete
+      
+      // Only close modal on success
+      onClose();
     } catch (error) {
       console.error('Transaction failed:', error);
-      // Keep processing state to show error
+      // Keep modal open on error so user can retry or cancel
+      // Error toast is already shown by parent component
     } finally {
       setIsProcessing(false);
       setProofProgress(0);

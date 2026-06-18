@@ -251,7 +251,7 @@ const App: React.FC = () => {
         const storageKey = `transactions_${address.toLowerCase()}`;
         localStorage.setItem(storageKey, JSON.stringify(updatedTransactions));
       }
-      closeModal();
+      // Modal will be closed by ActionModal after success
 
       console.log('[Balance Refresh] Transaction completed, starting balance refresh...');
       console.log('[Balance Refresh] Current balance before refetch:', balance);

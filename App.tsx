@@ -13,6 +13,7 @@ import { useAccount, useBalance, useChainId, useSwitchChain } from 'wagmi';
 import { atoshiL2 } from './wagmi.config';
 import { useWallet } from './hooks/useWallet';
 import { Shield } from 'lucide-react';
+import { formatErrorForDisplay } from './utils/error-parser';
 
 const App: React.FC = () => {
   const { t } = useTranslation();
@@ -268,23 +269,8 @@ const App: React.FC = () => {
     } catch (error) {
       console.error('Transaction failed:', error);
       
-      // Handle user rejection gracefully
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      let displayMessage = t('transactionFailed');
-      
-      // Check for common rejection patterns
-      if (
-        errorMessage.includes('user rejected') ||
-        errorMessage.includes('User rejected') ||
-        errorMessage.includes('rejected by user') ||
-        errorMessage.includes('ACTION_REJECTED') ||
-        errorMessage.includes('4001') // MetaMask error code for user rejection
-      ) {
-        displayMessage = t('userRefusedOperation');
-      } else {
-        // For other errors, show a simplified message
-        displayMessage = `${t('transactionFailed')}: ${errorMessage.length > 50 ? errorMessage.substring(0, 50) + '...' : errorMessage}`;
-      }
+      // Use friendly error parser
+      const displayMessage = formatErrorForDisplay(error);
       
       setToastMessage(displayMessage);
       setShowToast(true);

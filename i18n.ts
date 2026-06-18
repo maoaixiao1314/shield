@@ -51,6 +51,92 @@ const zh = {
   userRefusedOperation: '用户拒绝了操作',
   unknownError: '未知错误',
   
+  // Error Messages
+  error: {
+    userRejected: {
+      title: '操作已取消',
+      message: '您在钱包中取消了此操作',
+      suggestion: '如需继续,请重新发起交易',
+    },
+    insufficientBalance: {
+      title: '余额不足',
+      message: '您的账户余额不足以完成此交易',
+      suggestion: '请确保账户有足够的代币和Gas费用',
+    },
+    insufficientGas: {
+      title: 'Gas费用不足',
+      message: '当前设置的Gas费用不足以完成交易',
+      suggestion: '请在钱包中提高Gas限制或Gas价格',
+    },
+    network: {
+      title: '网络连接失败',
+      message: '无法连接到区块链网络',
+      suggestion: '请检查网络连接后重试',
+    },
+    invalidAddress: {
+      title: '地址无效',
+      message: '收款地址格式不正确',
+      suggestion: '请检查并输入正确的地址',
+    },
+    invalidAmount: {
+      title: '金额无效',
+      message: '交易金额不符合要求',
+      suggestion: '请确保金额为正数且不超过可用余额',
+    },
+    alreadySpent: {
+      title: 'Note已使用',
+      message: '您选择的隐私Note已经被使用',
+      suggestion: '请点击"从链上恢复Note"同步最新状态',
+    },
+    notInitialized: {
+      title: '隐私功能未启用',
+      message: '您需要先初始化隐私功能',
+      suggestion: '请点击"设置隐私"开始',
+    },
+    wrongChain: {
+      title: '网络错误',
+      message: '当前不在Atoshi L2网络上',
+      suggestion: '请切换到Atoshi L2网络后重试',
+    },
+    contractExecutionFailed: {
+      title: '合约执行失败',
+      message: '交易在合约层面执行失败,但未返回具体错误信息',
+      suggestion: '可能原因:\n1. 余额不足\n2. 未授权操作\n3. 合约条件不满足\n\n请检查账户余额和交易参数后重试',
+    },
+    estimateGasFailed: {
+      title: 'Gas估算失败',
+      message: '无法估算交易所需的Gas,交易可能会失败',
+      suggestion: '可能原因:\n1. 余额不足\n2. 合约条件不满足\n3. 参数错误\n\n请检查交易参数和账户余额后重试',
+    },
+    noNotesAvailable: {
+      title: '没有可用的 Note',
+      message: '隐私池中没有可用的 Note。请先进行屏蔽操作',
+      messageWithAmount: '隐私池中没有可用的 Note。请先屏蔽 {{amount}} ATOSHI',
+      suggestion: '操作步骤:\n1. 在“公开”标签点击“屏蔽资金”\n2. 等待交易确认\n3. 点击“从链上恢复 Note”同步\n4. 再来尝试此操作',
+    },
+    noMatchingNote: {
+      title: '没有匹配金额的 Note',
+      message: '隐私池中没有匹配金额的 Note',
+      messageWithAmount: '隐私池中没有金额为 {{amount}} ATOSHI 的 Note',
+      suggestion: 'V1 版本不支持找零,Note 金额必须与转账金额完全一致。\n\n请:\n1. 查看可用的 Note 金额列表\n2. 使用匹配的金额进行交易\n3. 或先屏蔽所需金额的 Note',
+    },
+    noteNotSynced: {
+      title: 'Note 未同步',
+      message: 'Note 尚未与链上状态同步',
+      suggestion: '请点击“从链上恢复 Note”按钮同步最新状态后再试',
+    },
+    invalidReceivingCode: {
+      title: '接收码无效',
+      message: '隐私接收码格式不正确',
+      suggestion: '请使用对方通过“设置隐私”生成的JSON格式接收码',
+    },
+    unknown: {
+      title: '交易失败',
+      message: '交易执行时发生错误',
+      suggestion: '请稍后重试',
+    },
+  },
+  
   // Header.tsx
   mainnet: '主网',
   privacyLayer: '隐私层',
@@ -189,6 +275,92 @@ const en = {
   transactionFailed: 'Transaction failed',
   userRefusedOperation: 'User refused the operation',
   unknownError: 'Unknown error',
+  
+  // Error Messages
+  error: {
+    userRejected: {
+      title: 'Operation Cancelled',
+      message: 'You cancelled this operation in your wallet',
+      suggestion: 'To continue, please initiate the transaction again',
+    },
+    insufficientBalance: {
+      title: 'Insufficient Balance',
+      message: 'Your account balance is insufficient for this transaction',
+      suggestion: 'Please ensure you have enough tokens and gas fees',
+    },
+    insufficientGas: {
+      title: 'Insufficient Gas',
+      message: 'The current gas setting is insufficient to complete the transaction',
+      suggestion: 'Please increase the gas limit or gas price in your wallet',
+    },
+    network: {
+      title: 'Network Connection Failed',
+      message: 'Unable to connect to the blockchain network',
+      suggestion: 'Please check your connection and try again',
+    },
+    invalidAddress: {
+      title: 'Invalid Address',
+      message: 'The recipient address format is incorrect',
+      suggestion: 'Please check and enter the correct address',
+    },
+    invalidAmount: {
+      title: 'Invalid Amount',
+      message: 'The transaction amount does not meet requirements',
+      suggestion: 'Please ensure the amount is positive and does not exceed available balance',
+    },
+    alreadySpent: {
+      title: 'Note Already Used',
+      message: 'The privacy note you selected has already been used',
+      suggestion: 'Please click "Recover Notes from chain" to sync the latest status',
+    },
+    notInitialized: {
+      title: 'Privacy Not Enabled',
+      message: 'You need to initialize privacy features first',
+      suggestion: 'Please click "Setup Privacy" to get started',
+    },
+    wrongChain: {
+      title: 'Network Error',
+      message: 'Not currently on Atoshi L2 network',
+      suggestion: 'Please switch to Atoshi L2 network and try again',
+    },
+    contractExecutionFailed: {
+      title: 'Contract Execution Failed',
+      message: 'Transaction failed at contract level without specific error details',
+      suggestion: 'Possible reasons:\n1. Insufficient balance\n2. Unauthorized operation\n3. Contract conditions not met\n\nPlease check your balance and transaction parameters',
+    },
+    estimateGasFailed: {
+      title: 'Gas Estimation Failed',
+      message: 'Unable to estimate gas required for transaction',
+      suggestion: 'Possible reasons:\n1. Insufficient balance\n2. Contract conditions not met\n3. Invalid parameters\n\nPlease check transaction parameters and account balance',
+    },
+    noNotesAvailable: {
+      title: 'No Notes Available',
+      message: 'No notes available in the privacy pool. Please shield funds first',
+      messageWithAmount: 'No notes available. Please shield {{amount}} ATOSHI first',
+      suggestion: 'Steps:\n1. Click "Shield Funds" in Public tab\n2. Wait for transaction confirmation\n3. Click "Recover Notes from chain" to sync\n4. Try this operation again',
+    },
+    noMatchingNote: {
+      title: 'No Matching Note Amount',
+      message: 'No note with matching amount in the privacy pool',
+      messageWithAmount: 'No note with amount {{amount}} ATOSHI in the pool',
+      suggestion: 'V1 does not support change. Note amount must exactly match transfer amount.\n\nPlease:\n1. Check available note amounts\n2. Use matching amount for transaction\n3. Or shield the required amount first',
+    },
+    noteNotSynced: {
+      title: 'Note Not Synced',
+      message: 'Note has not been synced with on-chain state',
+      suggestion: 'Please click "Recover Notes from chain" to sync latest status before retrying',
+    },
+    invalidReceivingCode: {
+      title: 'Invalid Receiving Code',
+      message: 'Privacy receiving code format is incorrect',
+      suggestion: 'Please use the JSON format receiving code generated via "Setup Privacy"',
+    },
+    unknown: {
+      title: 'Transaction Failed',
+      message: 'An error occurred during transaction execution',
+      suggestion: 'Please try again later',
+    },
+  },
   
   // Header.tsx
   mainnet: 'Mainnet',

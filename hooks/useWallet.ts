@@ -885,21 +885,53 @@ export function useWallet() {
     );
 
     console.log('[transfer] Generating ZK proof...');
-    const { proof, root, nullifierHash } = await prepareAndProveTransfer({
-      provider,
-      shieldAddress: config.contracts.shield,
-      spendingKey,
-      oldNote: {
-        commitment: BigInt(oldNote.commitment),
-        amount: BigInt(oldNote.amount),
-        tokenId,
-        blinding: BigInt(oldNote.secret),
-        leafIndex: oldNote.leafIndex,
-      },
-      newOwnerPubkey: bobOwnerPubkey,
-      newCommitment,
-      newBlinding,
-    }, (stage) => console.log('[transfer]', stage));
+    let proofResult;
+    try {
+      proofResult = await prepareAndProveTransfer({
+        provider,
+        shieldAddress: config.contracts.shield,
+        spendingKey,
+        oldNote: {
+          commitment: BigInt(oldNote.commitment),
+          amount: BigInt(oldNote.amount),
+          tokenId,
+          blinding: BigInt(oldNote.secret),
+          leafIndex: oldNote.leafIndex,
+        },
+        newOwnerPubkey: bobOwnerPubkey,
+        newCommitment,
+        newBlinding,
+      }, (stage) => console.log('[transfer]', stage));
+    } catch (error) {
+      console.error('ZK proof generation failed:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+
+      if (errorMessage.includes('Assert Failed') || errorMessage.includes('MerkleTreeChecker')) {
+        throw new Error(
+          '零知识证明生成失败。可能原因：\n' +
+          '1. Note 的 leafIndex 不正确\n' +
+          '2. Merkle tree 状态与链上不同步\n' +
+          '3. Spending key 错误\n\n' +
+          '请尝试：\n' +
+          '• 点击“🔄 从链上恢复 Notes”同步最新状态\n' +
+          '• 重新执行屏蔽资金操作获取新的 Note'
+        );
+      }
+
+      if (errorMessage.includes('signal is aborted') || errorMessage.includes('aborted without reason')) {
+        throw new Error(
+          '网络请求被中断。可能原因：\n' +
+          '1. RPC 节点响应超时\n' +
+          '2. 网络连接不稳定\n' +
+          '3. ZK 证明生成时间过长导致超时\n\n' +
+          '请检查网络连接后重试。'
+        );
+      }
+
+      throw error;
+    }
+
+    const { proof, root, nullifierHash } = proofResult;
 
     // 5. Call Shield.transfer
     const hash = await writeContractAsync({
@@ -1052,19 +1084,51 @@ export function useWallet() {
 
     // 3. Rebuild the Merkle tree + generate the ZK proof (takes 10-30 seconds)
     console.log('[unshield] Starting ZK proof generation...');
-    const { proof, root, nullifierHash } = await prepareAndProveUnshield({
-      provider,
-      shieldAddress: config.contracts.shield,
-      spendingKey,
-      note: {
-        commitment: BigInt(note.commitment),
-        amount: BigInt(note.amount),
-        tokenId: 0n,
-        blinding: BigInt(note.secret),  // the secret field actually stores the blinding
-        leafIndex: note.leafIndex,
-      },
-      recipientAddress: to,
-    }, (stage) => console.log('[unshield]', stage));
+    let proofResult;
+    try {
+      proofResult = await prepareAndProveUnshield({
+        provider,
+        shieldAddress: config.contracts.shield,
+        spendingKey,
+        note: {
+          commitment: BigInt(note.commitment),
+          amount: BigInt(note.amount),
+          tokenId: 0n,
+          blinding: BigInt(note.secret),  // the secret field actually stores the blinding
+          leafIndex: note.leafIndex,
+        },
+        recipientAddress: to,
+      }, (stage) => console.log('[unshield]', stage));
+    } catch (error) {
+      console.error('ZK proof generation failed:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+
+      if (errorMessage.includes('Assert Failed') || errorMessage.includes('MerkleTreeChecker')) {
+        throw new Error(
+          '零知识证明生成失败。可能原因：\n' +
+          '1. Note 的 leafIndex 不正确\n' +
+          '2. Merkle tree 状态与链上不同步\n' +
+          '3. Spending key 错误\n\n' +
+          '请尝试：\n' +
+          '• 点击“🔄 从链上恢复 Notes”同步最新状态\n' +
+          '• 重新执行屏蔽资金操作获取新的 Note'
+        );
+      }
+
+      if (errorMessage.includes('signal is aborted') || errorMessage.includes('aborted without reason')) {
+        throw new Error(
+          '网络请求被中断。可能原因：\n' +
+          '1. RPC 节点响应超时\n' +
+          '2. 网络连接不稳定\n' +
+          '3. ZK 证明生成时间过长导致超时\n\n' +
+          '请检查网络连接后重试。'
+        );
+      }
+
+      throw error;
+    }
+
+    const { proof, root, nullifierHash } = proofResult;
 
     // 4. Call Shield.withdraw
     const NATIVE_TOKEN = '0x0000000000000000000000000000000000000000' as const;

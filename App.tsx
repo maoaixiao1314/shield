@@ -118,11 +118,15 @@ const App: React.FC = () => {
     setIsRefreshingBalance(true);
     try {
       console.log('[Manual Refresh] Starting balance refresh...');
+      
+      // For public balance, use wagmi refetch
       await refetchBalance();
       
-      // Also refresh private balance if in private mode
+      // For private balance, recover notes from chain to get latest state
       if (activeAsset === AssetType.PRIVATE && wallet.privacyKeys?.isInitialized) {
-        refreshPrivateState();
+        console.log('[Manual Refresh] Recovering notes from chain for accurate balance...');
+        await recoverNotesFromChain();
+        console.log('[Manual Refresh] Notes recovered and balance updated');
       }
       
       console.log('[Manual Refresh] Balance refreshed successfully');
@@ -137,22 +141,27 @@ const App: React.FC = () => {
     }
   };
 
-  // Auto-refresh balance every 30 seconds when connected
+  // Auto-refresh balance every 60 seconds when connected
   useEffect(() => {
     if (!isConnected) return;
 
     const interval = setInterval(() => {
-      console.log('[Auto Refresh] Refreshing balance...');
+      console.log('[Auto Refresh] Refreshing balances...');
+      
+      // Refresh public balance
       refetchBalance();
       
-      // Also refresh private balance if in private mode
+      // For private balance, recover notes from chain to get accurate state
       if (activeAsset === AssetType.PRIVATE && wallet.privacyKeys?.isInitialized) {
-        refreshPrivateState();
+        console.log('[Auto Refresh] Recovering notes from chain...');
+        recoverNotesFromChain().catch(err => {
+          console.warn('[Auto Refresh] Failed to recover notes:', err);
+        });
       }
-    }, 30000); // 30 seconds
+    }, 60000); // 60 seconds (longer interval because chain recovery is heavy)
 
     return () => clearInterval(interval);
-  }, [isConnected, activeAsset, refetchBalance, refreshPrivateState, wallet.privacyKeys?.isInitialized]);
+  }, [isConnected, activeAsset, refetchBalance, recoverNotesFromChain, wallet.privacyKeys?.isInitialized]);
 
   const handleRecoverNotes = async () => {
     if (!ensureConnectedAndOnL2()) return;

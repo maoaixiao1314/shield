@@ -1344,7 +1344,11 @@ export function useWallet() {
         "0x0000000000000000000000000000000000000000", // Native ATOS (address(0))
         true,                                       // forceUpdateGlobalExitRoot
         "0x",                                       // No permit data
-        { value: amountWei }                        // Send ATOS with transaction
+        { 
+          value: amountWei,
+          type: 0,                                  // ⭐ Force Legacy transaction (fork11 only accepts Type 0)
+          gasPrice: 2_000_000_000                   // 2 gwei
+        }                        // Send ATOS with transaction
       );
 
       console.log('[bridgeDeposit] Transaction sent:', tx.hash);
@@ -1486,7 +1490,11 @@ export function useWallet() {
         "0x0000000000000000000000000000000000000000", // Native ATOS (address(0))
         true,                                       // forceUpdateGlobalExitRoot
         "0x",                                       // No permit data
-        { value: amountWei }                        // Send ATOS with transaction
+        { 
+          value: amountWei,
+          type: 0,                                  // ⭐ Force Legacy transaction (fork11 only accepts Type 0)
+          gasPrice: 2_000_000_000                   // 2 gwei
+        }                        // Send ATOS with transaction
       );
 
       console.log('[bridgeWithdraw] Transaction sent:', tx.hash);

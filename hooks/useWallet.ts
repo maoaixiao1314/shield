@@ -64,6 +64,7 @@ import {
   prepareAndProveUnshield,
   prepareAndProveTransfer,
 } from '../sdk/zk-prover';
+import { formatAmountWithSuffix } from '../utils/amount-formatter';
 
 // Local helper: Uint8Array → 0x hex (the SDK doesn't export this, so write a one-liner)
 const bytesToHex = (b: Uint8Array): string => {
@@ -199,9 +200,8 @@ export function useWallet() {
     const total = notes
       .filter((n: any) => !n.spent)
       .reduce((sum: bigint, n: any) => sum + BigInt(n.amount), 0n);
-    // Truncate to 4 decimal places (floor, not round)
-    const formattedValue = Math.floor(Number(ethers.formatEther(total)) * 10000) / 10000;
-    const formattedBalance = `${formattedValue} ATOS`;
+    // Format with new precision rules (8 decimals max, hide trailing zeros, floor)
+    const formattedBalance = formatAmountWithSuffix(total, true);
     console.log('[Private Balance Refresh] Refreshing private balance:', {
       totalNotes: notes.length,
       unspentNotes: notes.filter((n: any) => !n.spent).length,
@@ -310,11 +310,11 @@ export function useWallet() {
   const updatePrivateBalance = async () => {
     try {
       const balance = await sdk.getPrivateBalance();
-      // Truncate to 4 decimal places (floor, not round)
-      const formattedValue = Math.floor(Number(ethers.formatEther(balance)) * 10000) / 10000;
+      // Format with new precision rules (8 decimals max, hide trailing zeros, floor)
+      const formattedBalance = formatAmountWithSuffix(balance, true);
       setWallet(prev => ({
         ...prev,
-        privateBalance: `${formattedValue} ATOS`
+        privateBalance: formattedBalance
       }));
     } catch (error) {
       console.error('Failed to update private balance:', error);
@@ -467,7 +467,7 @@ export function useWallet() {
       return {
         id: hash,
         type: TransactionType.SHIELD,
-        amount: `${amount} ATOS`,
+        amount: formatAmountWithSuffix(amount),
         asset: 'ATOS',
         timestamp: Date.now(),
         from: accountAddress,
@@ -1000,7 +1000,7 @@ export function useWallet() {
     return {
       id: hash,
       type: TransactionType.PRIVATE_SEND,
-      amount: `${amount} ATOS`,
+      amount: formatAmountWithSuffix(amount),
       asset: 'ATOS',
       timestamp: Date.now(),
       from: wallet.privacyKeys.publicAddress,
@@ -1204,7 +1204,7 @@ export function useWallet() {
     return {
       id: hash,
       type: TransactionType.UNSHIELD,
-      amount: `${amount} ATOS`,
+      amount: formatAmountWithSuffix(amount),
       asset: 'ATOS',
       timestamp: Date.now(),
       from: wallet.privacyKeys.publicAddress,
@@ -1270,7 +1270,7 @@ export function useWallet() {
       return {
         id: hash,
         type: TransactionType.TRANSFER,
-        amount: `${amount} ATOS`,
+        amount: formatAmountWithSuffix(amount),
         asset: 'ATOS',
         timestamp: Date.now(),
         from: accountAddress,
@@ -1361,7 +1361,7 @@ export function useWallet() {
       return {
         id: receipt.hash,
         type: TransactionType.BRIDGE_DEPOSIT,
-        amount: `${amount} ATOS`,
+        amount: formatAmountWithSuffix(amount),
         asset: 'ATOS',
         timestamp: Date.now(),
         from: destinationAddress,  // Use the address we already fetched
@@ -1507,7 +1507,7 @@ export function useWallet() {
       return {
         id: receipt.hash,
         type: TransactionType.BRIDGE_WITHDRAW,
-        amount: `${amount} ATOS`,
+        amount: formatAmountWithSuffix(amount),
         asset: 'ATOS',
         timestamp: Date.now(),
         from: destinationAddress,  // Use the address we already fetched

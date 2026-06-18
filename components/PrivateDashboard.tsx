@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { WalletState, Transaction, TransactionType } from '../types';
 import { Ghost, ShieldX, Sparkles, Key, Info, ExternalLink, Eye, EyeOff } from 'lucide-react';
+import { formatAmount } from '../utils/amount-formatter';
 import HistoryItem from './HistoryItem';
 import QRCodeDisplay from './QRCodeDisplay';
 
@@ -175,8 +176,8 @@ const PrivateDashboard: React.FC<PrivateDashboardProps> = ({ wallet, transaction
                 const amountEther = (() => {
                   try {
                     const big = typeof note.amount === 'bigint' ? note.amount : BigInt(note.amount);
-                    // Truncate to 4 decimal places (floor, not round)
-                    return Math.floor((Number(big) / 1e18) * 10000) / 10000;
+                    // Format with new precision rules (8 decimals max, hide trailing zeros, floor)
+                    return formatAmount(big, true);
                   } catch {
                     return '?';
                   }

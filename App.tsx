@@ -14,6 +14,7 @@ import { atoshiL2 } from './wagmi.config';
 import { useWallet } from './hooks/useWallet';
 import { Shield } from 'lucide-react';
 import { formatErrorForDisplay } from './utils/error-parser';
+import { formatAmountWithSuffix } from './utils/amount-formatter';
 
 const App: React.FC = () => {
   const { t } = useTranslation();
@@ -321,7 +322,7 @@ const App: React.FC = () => {
     address: address || '',
     // Force-display ATOS (don't trust the symbol returned by the wallet — MetaMask and others store an inaccurate symbol for user-defined chains)
     // Truncate to 4 decimal places (floor, not round)
-    publicBalance: balance ? `${Math.floor(parseFloat(balance.formatted) * 10000) / 10000} ATOS` : '0 ATOS'
+    publicBalance: balance ? formatAmountWithSuffix(balance.formatted) : '0 ATOS'
   };
 
   return (

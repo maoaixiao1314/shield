@@ -107,7 +107,7 @@ const App: React.FC = () => {
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
 
-  // Manual balance refresh handler
+  // Manual balance refresh handler (only for public balance)
   const handleRefreshBalance = async () => {
     if (!isConnected) {
       setToastMessage(t('pleaseConnectFirst'));
@@ -117,19 +117,10 @@ const App: React.FC = () => {
 
     setIsRefreshingBalance(true);
     try {
-      console.log('[Manual Refresh] Starting balance refresh...');
-      
-      // For public balance, use wagmi refetch
+      console.log('[Manual Refresh] Refreshing public balance...');
       await refetchBalance();
       
-      // For private balance, recover notes from chain to get latest state
-      if (activeAsset === AssetType.PRIVATE && wallet.privacyKeys?.isInitialized) {
-        console.log('[Manual Refresh] Recovering notes from chain for accurate balance...');
-        await recoverNotesFromChain();
-        console.log('[Manual Refresh] Notes recovered and balance updated');
-      }
-      
-      console.log('[Manual Refresh] Balance refreshed successfully');
+      console.log('[Manual Refresh] Public balance refreshed successfully');
       setToastMessage(t('balanceRefreshed'));
       setShowToast(true);
     } catch (error) {
@@ -141,27 +132,17 @@ const App: React.FC = () => {
     }
   };
 
-  // Auto-refresh balance every 60 seconds when connected
+  // Auto-refresh public balance every 60 seconds when connected
   useEffect(() => {
     if (!isConnected) return;
 
     const interval = setInterval(() => {
-      console.log('[Auto Refresh] Refreshing balances...');
-      
-      // Refresh public balance
+      console.log('[Auto Refresh] Refreshing public balance...');
       refetchBalance();
-      
-      // For private balance, recover notes from chain to get accurate state
-      if (activeAsset === AssetType.PRIVATE && wallet.privacyKeys?.isInitialized) {
-        console.log('[Auto Refresh] Recovering notes from chain...');
-        recoverNotesFromChain().catch(err => {
-          console.warn('[Auto Refresh] Failed to recover notes:', err);
-        });
-      }
-    }, 60000); // 60 seconds (longer interval because chain recovery is heavy)
+    }, 60000); // 60 seconds
 
     return () => clearInterval(interval);
-  }, [isConnected, activeAsset, refetchBalance, recoverNotesFromChain, wallet.privacyKeys?.isInitialized]);
+  }, [isConnected, refetchBalance]);
 
   const handleRecoverNotes = async () => {
     if (!ensureConnectedAndOnL2()) return;
@@ -424,8 +405,8 @@ const App: React.FC = () => {
         <main className="flex-1 px-6 pt-4 pb-8 z-10">
           <AssetToggle activeAsset={activeAsset} setActiveAsset={setActiveAsset} />
 
-          {/* Balance refresh button */}
-          {isConnected && (
+          {/* Balance refresh button - only shown in public mode */}
+          {isConnected && activeAsset === AssetType.PUBLIC && (
             <div className="mt-4 flex justify-center">
               <button
                 onClick={handleRefreshBalance}

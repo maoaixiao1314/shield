@@ -176,7 +176,7 @@ const PrivateDashboard: React.FC<PrivateDashboardProps> = ({ wallet, transaction
                 const amountEther = (() => {
                   try {
                     const big = typeof note.amount === 'bigint' ? note.amount : BigInt(note.amount);
-                    // Format with new precision rules (8 decimals max, hide trailing zeros, floor)
+                    // Format with precision rules (2 decimals max, hide trailing zeros, floor)
                     return formatAmount(big, true);
                   } catch {
                     return '?';

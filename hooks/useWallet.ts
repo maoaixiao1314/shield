@@ -200,7 +200,7 @@ export function useWallet() {
     const total = notes
       .filter((n: any) => !n.spent)
       .reduce((sum: bigint, n: any) => sum + BigInt(n.amount), 0n);
-    // Format with new precision rules (8 decimals max, hide trailing zeros, floor)
+    // Format with precision rules (2 decimals max, hide trailing zeros, floor)
     const formattedBalance = formatAmountWithSuffix(total, true);
     console.log('[Private Balance Refresh] Refreshing private balance:', {
       totalNotes: notes.length,
@@ -310,7 +310,7 @@ export function useWallet() {
   const updatePrivateBalance = async () => {
     try {
       const balance = await sdk.getPrivateBalance();
-      // Format with new precision rules (8 decimals max, hide trailing zeros, floor)
+      // Format with precision rules (2 decimals max, hide trailing zeros, floor)
       const formattedBalance = formatAmountWithSuffix(balance, true);
       setWallet(prev => ({
         ...prev,

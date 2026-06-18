@@ -103,8 +103,56 @@ const App: React.FC = () => {
   } = useWallet();
 
   const [isRecovering, setIsRecovering] = useState(false);
+  const [isRefreshingBalance, setIsRefreshingBalance] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
+
+  // Manual balance refresh handler
+  const handleRefreshBalance = async () => {
+    if (!isConnected) {
+      setToastMessage(t('pleaseConnectFirst'));
+      setShowToast(true);
+      return;
+    }
+
+    setIsRefreshingBalance(true);
+    try {
+      console.log('[Manual Refresh] Starting balance refresh...');
+      await refetchBalance();
+      
+      // Also refresh private balance if in private mode
+      if (activeAsset === AssetType.PRIVATE && wallet.privacyKeys?.isInitialized) {
+        refreshPrivateState();
+      }
+      
+      console.log('[Manual Refresh] Balance refreshed successfully');
+      setToastMessage(t('balanceRefreshed'));
+      setShowToast(true);
+    } catch (error) {
+      console.error('[Manual Refresh] Failed to refresh balance:', error);
+      setToastMessage(t('refreshFailed'));
+      setShowToast(true);
+    } finally {
+      setIsRefreshingBalance(false);
+    }
+  };
+
+  // Auto-refresh balance every 30 seconds when connected
+  useEffect(() => {
+    if (!isConnected) return;
+
+    const interval = setInterval(() => {
+      console.log('[Auto Refresh] Refreshing balance...');
+      refetchBalance();
+      
+      // Also refresh private balance if in private mode
+      if (activeAsset === AssetType.PRIVATE && wallet.privacyKeys?.isInitialized) {
+        refreshPrivateState();
+      }
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(interval);
+  }, [isConnected, activeAsset, refetchBalance, refreshPrivateState, wallet.privacyKeys?.isInitialized]);
 
   const handleRecoverNotes = async () => {
     if (!ensureConnectedAndOnL2()) return;
@@ -366,6 +414,38 @@ const App: React.FC = () => {
 
         <main className="flex-1 px-6 pt-4 pb-8 z-10">
           <AssetToggle activeAsset={activeAsset} setActiveAsset={setActiveAsset} />
+
+          {/* Balance refresh button */}
+          {isConnected && (
+            <div className="mt-4 flex justify-center">
+              <button
+                onClick={handleRefreshBalance}
+                disabled={isRefreshingBalance}
+                className={`px-4 py-2 text-xs font-bold uppercase tracking-widest rounded-full border transition-all disabled:opacity-50 ${
+                  activeAsset === AssetType.PUBLIC
+                    ? 'bg-blue-50 border-blue-200 text-blue-600 hover:bg-blue-100'
+                    : 'bg-zinc-900 border-zinc-700 text-zinc-300 hover:bg-zinc-800'
+                }`}
+              >
+                {isRefreshingBalance ? (
+                  <span className="flex items-center gap-2">
+                    <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    {t('refreshing')}
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    {t('refreshBalance')}
+                  </span>
+                )}
+              </button>
+            </div>
+          )}
 
           <div className="mt-8">
             {activeAsset === AssetType.PUBLIC ? (

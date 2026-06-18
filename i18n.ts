@@ -50,6 +50,10 @@ const zh = {
   transactionFailed: '交易失败',
   userRefusedOperation: '用户拒绝了操作',
   unknownError: '未知错误',
+  refreshBalance: '刷新余额',
+  refreshing: '刷新中...',
+  balanceRefreshed: '余额已刷新',
+  refreshFailed: '刷新失败',
 
   // Error Messages
   error: {
@@ -275,6 +279,10 @@ const en = {
   transactionFailed: 'Transaction failed',
   userRefusedOperation: 'User refused the operation',
   unknownError: 'Unknown error',
+  refreshBalance: 'Refresh Balance',
+  refreshing: 'Refreshing...',
+  balanceRefreshed: 'Balance refreshed',
+  refreshFailed: 'Refresh failed',
 
   // Error Messages
   error: {

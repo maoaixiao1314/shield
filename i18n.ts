@@ -18,7 +18,7 @@ const zh = {
   noWalletDetected: '未检测到钱包，请使用钱包访问本应用',
   walletConnectionFailed: '钱包连接失败',
   connectionFailed: '连接失败',
-  
+
   // Transaction Types (HistoryItem.tsx)
   transactionType: {
     publicTransfer: '公开转账',
@@ -27,15 +27,15 @@ const zh = {
     shieldedTransfer: '隐私转账',
     transaction: '交易',
   },
-  
+
   // App.tsx
-  welcomeTitle: '欢迎来到 Atoshi Privacy',
+  welcomeTitle: '欢迎来到 Atos Privacy',
   welcomeSubtitle: '连接您的钱包以访问隐私功能',
-  notOnAtoshiL2: '⚠️ 当前不在 Atoshi L2 链上',
+  notOnAtoshiL2: '⚠️ 当前不在 Atos L2 链上',
   currentChain: '当前链',
-  needSwitchToL2: '需要切换到 Atoshi L2 (链',
-  addNetworkTip: '💡 如果 MetaMask 从未添加过 Atoshi L2,点击下方按钮将自动添加',
-  addAndSwitch: '➕ 添加并切换到 Atoshi L2',
+  needSwitchToL2: '需要切换到 Atos L2 (链',
+  addNetworkTip: '💡 如果 MetaMask 从未添加过 Atos L2,点击下方按钮将自动添加',
+  addAndSwitch: '➕ 添加并切换到 Atos L2',
   switch: '切换',
   failedToAdd: '添加失败',
   scanComplete: '扫描完成,已恢复',
@@ -45,12 +45,12 @@ const zh = {
   recoverNotesFromChain: '🔄 从链上恢复 Notes',
   pleaseConnectFirst: '请先连接钱包!',
   initializePrivacyFirst: '请先初始化您的隐私身份(点击"设置隐私")',
-  connectAndSwitchL2: '请先连接钱包并切换到 Atoshi L2 链(链 67890)',
+  connectAndSwitchL2: '请先连接钱包并切换到 Atos L2 链(链 67890)',
   transactionSuccess: '交易成功',
   transactionFailed: '交易失败',
   userRefusedOperation: '用户拒绝了操作',
   unknownError: '未知错误',
-  
+
   // Error Messages
   error: {
     userRejected: {
@@ -95,8 +95,8 @@ const zh = {
     },
     wrongChain: {
       title: '网络错误',
-      message: '当前不在Atoshi L2网络上',
-      suggestion: '请切换到Atoshi L2网络后重试',
+      message: '当前不在Atos L2网络上',
+      suggestion: '请切换到Atos L2网络后重试',
     },
     contractExecutionFailed: {
       title: '合约执行失败',
@@ -111,13 +111,13 @@ const zh = {
     noNotesAvailable: {
       title: '没有可用的 Note',
       message: '隐私池中没有可用的 Note。请先进行屏蔽操作',
-      messageWithAmount: '隐私池中没有可用的 Note。请先屏蔽 {{amount}} ATOSHI',
+      messageWithAmount: '隐私池中没有可用的 Note。请先屏蔽 {{amount}} ATOS',
       suggestion: '操作步骤:\n1. 在“公开”标签点击“屏蔽资金”\n2. 等待交易确认\n3. 点击“从链上恢复 Note”同步\n4. 再来尝试此操作',
     },
     noMatchingNote: {
       title: '没有匹配金额的 Note',
       message: '隐私池中没有匹配金额的 Note',
-      messageWithAmount: '隐私池中没有金额为 {{amount}} ATOSHI 的 Note',
+      messageWithAmount: '隐私池中没有金额为 {{amount}} ATOS 的 Note',
       suggestion: 'V1 版本不支持找零,Note 金额必须与转账金额完全一致。\n\n请:\n1. 查看可用的 Note 金额列表\n2. 使用匹配的金额进行交易\n3. 或先屏蔽所需金额的 Note',
     },
     noteNotSynced: {
@@ -136,7 +136,7 @@ const zh = {
       suggestion: '请稍后重试',
     },
   },
-  
+
   // Header.tsx
   mainnet: '主网',
   privacyLayer: '隐私层',
@@ -153,7 +153,7 @@ const zh = {
   disconnectTitle: '断开钱包连接 + 清除会话缓存',
   fullyCleared: '✓ 已从 localStorage + sessionStorage 完全清除',
   items: '个项目',
-  
+
   // SetupPrivacy.tsx
   activatePrivacy: '激活隐私层',
   deriveDesc: '使用您的 ETH 地址确定性派生 ZK 密钥。\n无需助记词 — 只需一次签名。',
@@ -164,17 +164,17 @@ const zh = {
   initFailed: '初始化失败',
   architectureMapping: '架构映射',
   ethMasterKey: 'ETH 主密钥',
-  eip712Signature: 'EIP-712 签名 (Atoshi v1)',
+  eip712Signature: 'EIP-712 签名 (Atos v1)',
   privacySeed: '隐私种子 (Poseidon 输出)',
-  
+
   // PublicDashboard.tsx
   publicBalance: '公开余额',
   depositFromWallet: '从钱包充值',
   withdrawToWallet: '提现到钱包',
-  sendATOSHI: '发送 ATOSHI',
+  sendATOSHI: '发送 ATOS',
   shieldFunds: '屏蔽资金',
   recentPublicTxs: '最近公开交易',
-  
+
   // PrivateDashboard.tsx
   shieldedAssets: '屏蔽资产',
   deterministicZKKeys: '确定性 ZK 密钥已激活',
@@ -198,9 +198,9 @@ const zh = {
   spent: '已花费',
   pendingSync: '等待同步',
   sessionTransactions: '本次会话的交易记录',
-  
+
   // ActionModal.tsx
-  sendATOSHITitle: '发送 ATOSHI',
+  sendATOSHITitle: '发送 ATOS',
   privacySendTitle: '隐私发送',
   shieldFundsTitle: '屏蔽资金',
   unshieldFundsTitle: '解除屏蔽资金',
@@ -220,8 +220,8 @@ const zh = {
   yourL1Address: '您的 L1 钱包地址',
   yourPrivacyPool: '您自己的隐私池(不需要接收方地址)',
   generatingZKProof: '本地生成 ZK 证明',
-  transferForPrivacy: '将 ATOSHI 从您的钱包转移到 L2 以进行隐私交易。',
-  bridgeWithdrawDesc: '将 ATOSHI 从 L2 桥接回 L1。由于 ZK 证明验证,这可能需要 1-2 小时。',
+  transferForPrivacy: '将 ATOS 从您的钱包转移到 L2 以进行隐私交易。',
+  bridgeWithdrawDesc: '将 ATOS 从 L2 桥接回 L1。由于 ZK 证明验证,这可能需要 1-2 小时。',
   privacyTxDesc: '资金将使用 nullifier 电路转移。公共浏览器上看不到任何链接数据。',
   publicTxDesc: '这是一笔公开交易。详细信息将对任何人可见。',
 };
@@ -243,7 +243,7 @@ const en = {
   noWalletDetected: 'No wallet detected. Please use a wallet to access this app',
   walletConnectionFailed: 'Wallet connection failed',
   connectionFailed: 'Connection failed',
-  
+
   // Transaction Types (HistoryItem.tsx)
   transactionType: {
     publicTransfer: 'Public Transfer',
@@ -252,15 +252,15 @@ const en = {
     shieldedTransfer: 'Shielded Transfer',
     transaction: 'Transaction',
   },
-  
+
   // App.tsx
-  welcomeTitle: 'Welcome to Atoshi Privacy',
+  welcomeTitle: 'Welcome to Atos Privacy',
   welcomeSubtitle: 'Connect your wallet to access privacy features',
-  notOnAtoshiL2: '⚠️ Not currently on the Atoshi L2 chain',
+  notOnAtoshiL2: '⚠️ Not currently on the Atos L2 chain',
   currentChain: 'Current chain',
-  needSwitchToL2: 'need to switch to Atoshi L2 (chain',
-  addNetworkTip: '💡 If MetaMask has never added Atoshi L2, clicking the button below will add it automatically.',
-  addAndSwitch: '➕ Add and switch to Atoshi L2',
+  needSwitchToL2: 'need to switch to Atos L2 (chain',
+  addNetworkTip: '💡 If MetaMask has never added Atos L2, clicking the button below will add it automatically.',
+  addAndSwitch: '➕ Add and switch to Atos L2',
   switch: 'Switch',
   failedToAdd: 'Failed to add',
   scanComplete: 'Scan complete, recovered',
@@ -270,12 +270,12 @@ const en = {
   recoverNotesFromChain: '🔄 Recover Notes from chain',
   pleaseConnectFirst: 'Please connect your wallet first!',
   initializePrivacyFirst: 'Please initialize your privacy identity first (click "Setup Privacy")',
-  connectAndSwitchL2: 'Please connect your wallet first and switch to the Atoshi L2 chain (chain 67890)',
+  connectAndSwitchL2: 'Please connect your wallet first and switch to the Atos L2 chain (chain 67890)',
   transactionSuccess: 'Transaction successful',
   transactionFailed: 'Transaction failed',
   userRefusedOperation: 'User refused the operation',
   unknownError: 'Unknown error',
-  
+
   // Error Messages
   error: {
     userRejected: {
@@ -320,8 +320,8 @@ const en = {
     },
     wrongChain: {
       title: 'Network Error',
-      message: 'Not currently on Atoshi L2 network',
-      suggestion: 'Please switch to Atoshi L2 network and try again',
+      message: 'Not currently on Atos L2 network',
+      suggestion: 'Please switch to Atos L2 network and try again',
     },
     contractExecutionFailed: {
       title: 'Contract Execution Failed',
@@ -336,13 +336,13 @@ const en = {
     noNotesAvailable: {
       title: 'No Notes Available',
       message: 'No notes available in the privacy pool. Please shield funds first',
-      messageWithAmount: 'No notes available. Please shield {{amount}} ATOSHI first',
+      messageWithAmount: 'No notes available. Please shield {{amount}} ATOS first',
       suggestion: 'Steps:\n1. Click "Shield Funds" in Public tab\n2. Wait for transaction confirmation\n3. Click "Recover Notes from chain" to sync\n4. Try this operation again',
     },
     noMatchingNote: {
       title: 'No Matching Note Amount',
       message: 'No note with matching amount in the privacy pool',
-      messageWithAmount: 'No note with amount {{amount}} ATOSHI in the pool',
+      messageWithAmount: 'No note with amount {{amount}} ATOS in the pool',
       suggestion: 'V1 does not support change. Note amount must exactly match transfer amount.\n\nPlease:\n1. Check available note amounts\n2. Use matching amount for transaction\n3. Or shield the required amount first',
     },
     noteNotSynced: {
@@ -361,7 +361,7 @@ const en = {
       suggestion: 'Please try again later',
     },
   },
-  
+
   // Header.tsx
   mainnet: 'Mainnet',
   privacyLayer: 'Privacy Layer',
@@ -378,7 +378,7 @@ const en = {
   disconnectTitle: 'Disconnect wallet + clear session cache',
   fullyCleared: '✓ Fully cleared',
   items: 'items',
-  
+
   // SetupPrivacy.tsx
   activatePrivacy: 'Activate Privacy Layer',
   deriveDesc: 'Deterministically derive your ZK-Keys using your ETH address.\nNo mnemonic needed — just one signature.',
@@ -389,17 +389,17 @@ const en = {
   initFailed: 'Initialization failed',
   architectureMapping: 'Architecture Mapping',
   ethMasterKey: 'ETH Master Key',
-  eip712Signature: 'EIP-712 Signature (Atoshi v1)',
+  eip712Signature: 'EIP-712 Signature (Atos v1)',
   privacySeed: 'Privacy Seed (Poseidon Output)',
-  
+
   // PublicDashboard.tsx
   publicBalance: 'Public Balance',
   depositFromWallet: 'Deposit from Wallet',
   withdrawToWallet: 'Withdraw to Wallet',
-  sendATOSHI: 'Send ATOSHI',
+  sendATOSHI: 'Send ATOS',
   shieldFunds: 'Shield Funds',
   recentPublicTxs: 'Recent Public Txs',
-  
+
   // PrivateDashboard.tsx
   shieldedAssets: 'Shielded Assets',
   deterministicZKKeys: 'Deterministic ZK-Keys Active',
@@ -423,9 +423,9 @@ const en = {
   spent: 'Spent',
   pendingSync: 'Pending Sync',
   sessionTransactions: "This Session's Transaction Records",
-  
+
   // ActionModal.tsx
-  sendATOSHITitle: 'Send ATOSHI',
+  sendATOSHITitle: 'Send ATOS',
   privacySendTitle: 'Privacy Send',
   shieldFundsTitle: 'Shield Funds',
   unshieldFundsTitle: 'Unshield Funds',
@@ -445,8 +445,8 @@ const en = {
   yourL1Address: 'Your L1 wallet address',
   yourPrivacyPool: 'Your own privacy pool (no recipient address required)',
   generatingZKProof: 'Generating ZK-Proof locally',
-  transferForPrivacy: 'Transfer ATOSHI from your wallet to L2 for privacy transactions.',
-  bridgeWithdrawDesc: 'Bridge ATOSHI from L2 back to L1. This may take 1-2 hours due to ZK proof verification.',
+  transferForPrivacy: 'Transfer ATOS from your wallet to L2 for privacy transactions.',
+  bridgeWithdrawDesc: 'Bridge ATOS from L2 back to L1. This may take 1-2 hours due to ZK proof verification.',
   privacyTxDesc: 'Funds will be moved using a nullifier circuit. No linking data will be visible to public explorers.',
   publicTxDesc: 'This is a public transaction. Details will be visible on-chain to anyone.',
 };

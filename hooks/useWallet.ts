@@ -138,8 +138,8 @@ class WagmiSigner {
 
 export function useWallet() {
   const [wallet, setWallet] = useState<WalletState>({
-    publicBalance: '0 ATOSHI',
-    privateBalance: '0 ATOSHI',
+    publicBalance: '0 ATOS',
+    privateBalance: '0 ATOS',
     address: '',
     privacyKeys: {
       spendingKey: '',
@@ -163,7 +163,7 @@ export function useWallet() {
     if (walletClient && walletClient.account) {
       return walletClient.account.address;
     }
-    
+
     // Fallback: use window.ethereum directly
     if ((window as any).ethereum) {
       try {
@@ -175,7 +175,7 @@ export function useWallet() {
         console.error('[ensureWalletConnected] Failed to get accounts:', error);
       }
     }
-    
+
     throw new Error('Please connect your wallet first');
   };
 
@@ -199,7 +199,9 @@ export function useWallet() {
     const total = notes
       .filter((n: any) => !n.spent)
       .reduce((sum: bigint, n: any) => sum + BigInt(n.amount), 0n);
-    const formattedBalance = `${ethers.formatEther(total)} ATOSHI`;
+    // Truncate to 4 decimal places (floor, not round)
+    const formattedValue = Math.floor(Number(ethers.formatEther(total)) * 10000) / 10000;
+    const formattedBalance = `${formattedValue} ATOS`;
     console.log('[Private Balance Refresh] Refreshing private balance:', {
       totalNotes: notes.length,
       unspentNotes: notes.filter((n: any) => !n.spent).length,
@@ -229,7 +231,7 @@ export function useWallet() {
         console.log('Signer initialized successfully:', await signer.getAddress());
         setProvider(provider);
         setSigner(signer);
-        
+
         // Try to load previously saved privacy keys
         const savedKeys = localStorage.getItem('privacy_keys');
         if (savedKeys) {
@@ -241,7 +243,7 @@ export function useWallet() {
         }
       }
     };
-    
+
     initProvider();
   }, [walletClient, sdk]);
 
@@ -308,9 +310,11 @@ export function useWallet() {
   const updatePrivateBalance = async () => {
     try {
       const balance = await sdk.getPrivateBalance();
+      // Truncate to 4 decimal places (floor, not round)
+      const formattedValue = Math.floor(Number(ethers.formatEther(balance)) * 10000) / 10000;
       setWallet(prev => ({
         ...prev,
-        privateBalance: `${ethers.formatEther(balance)} ATOSHI`
+        privateBalance: `${formattedValue} ATOS`
       }));
     } catch (error) {
       console.error('Failed to update private balance:', error);
@@ -325,7 +329,7 @@ export function useWallet() {
       // Ensure we're on L2 chain before executing transaction
       const currentChainId = await window.ethereum.request({ method: 'eth_chainId' });
       const l2ChainIdHex = '0x' + config.l2.chainId.toString(16);
-      
+
       if (currentChainId !== l2ChainIdHex) {
         console.log('[shield] Switching to L2 chain...');
         try {
@@ -463,8 +467,8 @@ export function useWallet() {
       return {
         id: hash,
         type: TransactionType.SHIELD,
-        amount: `${amount} ATOSHI`,
-        asset: 'ATOSHI',
+        amount: `${amount} ATOS`,
+        asset: 'ATOS',
         timestamp: Date.now(),
         from: accountAddress,
         to: wallet.privacyKeys.publicAddress,
@@ -473,10 +477,10 @@ export function useWallet() {
       };
     } catch (error) {
       console.error('Shield failed:', error);
-      
+
       // Provide user-friendly error messages for ZK proof errors
       const errorMessage = error instanceof Error ? error.message : String(error);
-      
+
       if (errorMessage.includes('Assert Failed') || errorMessage.includes('MerkleTreeChecker')) {
         throw new Error(
           '零知识证明生成失败。可能原因：\n' +
@@ -488,7 +492,7 @@ export function useWallet() {
           '• 重新执行屏蔽资金操作获取新的 Note'
         );
       }
-      
+
       if (errorMessage.includes('signal is aborted') || errorMessage.includes('aborted without reason')) {
         throw new Error(
           '网络请求被中断。可能原因：\n' +
@@ -498,7 +502,7 @@ export function useWallet() {
           '请检查网络连接后重试。'
         );
       }
-      
+
       throw error;
     }
   };
@@ -714,7 +718,7 @@ export function useWallet() {
   const loadNotes = (): any[] => {
     const stored = localStorage.getItem('privacy_notes');
     if (!stored) return [];
-    
+
     try {
       const notes = JSON.parse(stored);
       // Keep all fields, convert amount back to BigInt
@@ -746,7 +750,7 @@ export function useWallet() {
       // Ensure we're on L2 chain before executing transaction
       const currentChainId = await window.ethereum.request({ method: 'eth_chainId' });
       const l2ChainIdHex = '0x' + config.l2.chainId.toString(16);
-      
+
       if (currentChainId !== l2ChainIdHex) {
         console.log('[privateSend] Switching to L2 chain...');
         try {
@@ -833,7 +837,7 @@ export function useWallet() {
     if (matchingNotes.length === 0) {
       if (availableNotes.length === 0) {
         throw new Error(
-          `There are no Notes in the pool. Please Shield Funds first (e.g. Shield ${amount} ATOSHI),\n` +
+          `There are no Notes in the pool. Please Shield Funds first (e.g. Shield ${amount} ATOS),\n` +
           `then click "🔄 Recover Notes from chain" to sync the leafIndex,\n` +
           `then come back to transfer.`
         );
@@ -843,10 +847,10 @@ export function useWallet() {
         .map((n: any) => ethers.formatEther(n.amount))
         .join(', ');
       throw new Error(
-        `There is no Note with amount = ${amount} ATOSHI in the pool.\n\n` +
+        `There is no Note with amount = ${amount} ATOS in the pool.\n\n` +
         `V1 does not support change, so the Note amount must exactly equal the transfer amount.\n\n` +
-        `Your currently available Note amounts: [${amountsList}] ATOSHI\n\n` +
-        `Solution: Shield ${amount} ATOSHI first, then transfer.`
+        `Your currently available Note amounts: [${amountsList}] ATOS\n\n` +
+        `Solution: Shield ${amount} ATOS first, then transfer.`
       );
     }
     const oldNote = matchingNotes[0];
@@ -964,8 +968,8 @@ export function useWallet() {
     return {
       id: hash,
       type: TransactionType.PRIVATE_SEND,
-      amount: `${amount} ATOSHI`,
-      asset: 'ATOSHI',
+      amount: `${amount} ATOS`,
+      asset: 'ATOS',
       timestamp: Date.now(),
       from: wallet.privacyKeys.publicAddress,
       to,
@@ -984,7 +988,7 @@ export function useWallet() {
       // Ensure we're on L2 chain before executing transaction
       const currentChainId = await window.ethereum.request({ method: 'eth_chainId' });
       const l2ChainIdHex = '0x' + config.l2.chainId.toString(16);
-      
+
       if (currentChainId !== l2ChainIdHex) {
         console.log('[unshield] Switching to L2 chain...');
         try {
@@ -1022,7 +1026,7 @@ export function useWallet() {
     if (matchingNotes.length === 0) {
       if (availableNotes.length === 0) {
         throw new Error(
-          `There are no Notes in the pool. Please Shield Funds ${amount} ATOSHI first,\n` +
+          `There are no Notes in the pool. Please Shield Funds ${amount} ATOS first,\n` +
           `then click "🔄 Recover Notes from chain", then come back to withdraw.`
         );
       }
@@ -1030,10 +1034,10 @@ export function useWallet() {
         .map((n: any) => ethers.formatEther(n.amount))
         .join(', ');
       throw new Error(
-        `There is no Note with amount = ${amount} ATOSHI in the pool.\n\n` +
+        `There is no Note with amount = ${amount} ATOS in the pool.\n\n` +
         `V1 does not support automatic change, so the Note amount must exactly equal the withdrawal amount.\n\n` +
-        `Your currently available Note amounts: [${amountsList}] ATOSHI\n\n` +
-        `Solution: withdraw the full amount of an existing Note instead, or Shield ${amount} ATOSHI first and then withdraw.`
+        `Your currently available Note amounts: [${amountsList}] ATOS\n\n` +
+        `Solution: withdraw the full amount of an existing Note instead, or Shield ${amount} ATOS first and then withdraw.`
       );
     }
     const note = matchingNotes[0];
@@ -1136,8 +1140,8 @@ export function useWallet() {
     return {
       id: hash,
       type: TransactionType.UNSHIELD,
-      amount: `${amount} ATOSHI`,
-      asset: 'ATOSHI',
+      amount: `${amount} ATOS`,
+      asset: 'ATOS',
       timestamp: Date.now(),
       from: wallet.privacyKeys.publicAddress,
       to,
@@ -1155,7 +1159,7 @@ export function useWallet() {
       // Ensure we're on L2 chain before executing transaction
       const currentChainId = await window.ethereum.request({ method: 'eth_chainId' });
       const l2ChainIdHex = '0x' + config.l2.chainId.toString(16);
-      
+
       if (currentChainId !== l2ChainIdHex) {
         console.log('[transfer] Switching to L2 chain...');
         try {
@@ -1202,8 +1206,8 @@ export function useWallet() {
       return {
         id: hash,
         type: TransactionType.TRANSFER,
-        amount: `${amount} ATOSHI`,
-        asset: 'ATOSHI',
+        amount: `${amount} ATOS`,
+        asset: 'ATOS',
         timestamp: Date.now(),
         from: accountAddress,
         to,
@@ -1224,7 +1228,7 @@ export function useWallet() {
       // Check if user is on L1 chain
       const currentChainId = await window.ethereum.request({ method: 'eth_chainId' });
       const l1ChainIdHex = '0x' + config.l1.chainId.toString(16);
-      
+
       if (currentChainId !== l1ChainIdHex) {
         // Switch to L1 chain
         try {
@@ -1289,8 +1293,8 @@ export function useWallet() {
       return {
         id: receipt.hash,
         type: TransactionType.BRIDGE_DEPOSIT,
-        amount: `${amount} ATOSHI`,
-        asset: 'ATOSHI',
+        amount: `${amount} ATOS`,
+        asset: 'ATOS',
         timestamp: Date.now(),
         from: destinationAddress,  // Use the address we already fetched
         to: destinationAddress,
@@ -1314,10 +1318,10 @@ export function useWallet() {
           `${config.bridge.serviceUrl}/bridges/${destAddr}?limit=10`
         );
         const data = await resp.json();
-        
+
         // Find the deposit by tx_hash
         const deposit = data.deposits?.find((d: any) => d.tx_hash === l1TxHash);
-        
+
         if (deposit) {
           console.log('[Bridge Status]', {
             ready_for_claim: deposit.ready_for_claim,
@@ -1368,7 +1372,7 @@ export function useWallet() {
       // Check if user is on L2 chain and switch if needed
       const currentChainId = await window.ethereum.request({ method: 'eth_chainId' });
       const l2ChainIdHex = '0x' + config.l2.chainId.toString(16);
-      
+
       if (currentChainId !== l2ChainIdHex) {
         console.log('[bridgeWithdraw] Switching to L2 chain...');
         try {
@@ -1431,8 +1435,8 @@ export function useWallet() {
       return {
         id: receipt.hash,
         type: TransactionType.BRIDGE_WITHDRAW,
-        amount: `${amount} ATOSHI`,
-        asset: 'ATOSHI',
+        amount: `${amount} ATOS`,
+        asset: 'ATOS',
         timestamp: Date.now(),
         from: destinationAddress,  // Use the address we already fetched
         to: destinationAddress,
@@ -1455,7 +1459,7 @@ export function useWallet() {
         const resp = await fetch(
           `${config.bridge.serviceUrl}/bridges/${destAddr}?limit=50`
         );
-        
+
         if (!resp.ok) {
           console.warn('[L2->L1 Bridge Status] Bridge service returned error:', resp.status, resp.statusText);
           attempts++;
@@ -1464,9 +1468,9 @@ export function useWallet() {
           }
           return;
         }
-        
+
         const data = await resp.json();
-        
+
         // Log all deposits for debugging (only first few attempts)
         if (attempts < 3) {
           console.log('[L2->L1 Bridge Debug] All deposits:', data.deposits?.map((d: any) => ({
@@ -1476,12 +1480,12 @@ export function useWallet() {
             ready_for_claim: d.ready_for_claim
           })));
         }
-        
+
         // Find the withdrawal by tx_hash (net_id should be 1 for L2->L1)
-        const deposit = data.deposits?.find((d: any) => 
+        const deposit = data.deposits?.find((d: any) =>
           d.tx_hash === l2TxHash && d.net_id === 1
         );
-        
+
         if (deposit) {
           console.log('[L2->L1 Bridge Status]', {
             deposit_cnt: deposit.deposit_cnt,
@@ -1500,7 +1504,7 @@ export function useWallet() {
           // If not ready yet, continue polling
           if (!deposit.ready_for_claim) {
             console.log('[L2->L1 Bridge Status] Waiting for ZK proof verification... (may take 1-2 hours)');
-            
+
             // Show warning after 10 minutes
             if (attempts === 60) {
               console.warn('[L2->L1 Bridge Status] Still waiting for proof. This is normal, aggregator may be slow.');
@@ -1549,18 +1553,18 @@ export function useWallet() {
       const proofResp = await fetch(
         `${config.bridge.serviceUrl}/merkle-proof?deposit_cnt=${deposit.deposit_cnt}&net_id=1`
       );
-      
+
       if (!proofResp.ok) {
         throw new Error(`Failed to fetch merkle proof: ${proofResp.statusText}`);
       }
-      
+
       const proofData = await proofResp.json();
       console.log('[Auto Claim] Merkle proof fetched:', proofData);
 
       // Step 2: Switch to L1 chain
       const currentChainId = await window.ethereum.request({ method: 'eth_chainId' });
       const l1ChainIdHex = '0x' + config.l1.chainId.toString(16);
-      
+
       if (currentChainId !== l1ChainIdHex) {
         console.log('[Auto Claim] Switching to L1 chain...');
         try {
@@ -1615,7 +1619,7 @@ export function useWallet() {
       return receipt.hash;
     } catch (error: any) {
       console.error('[Auto Claim] Claim failed:', error);
-      
+
       // Handle common errors
       if (error.message?.includes('GlobalExitRootInvalid')) {
         console.warn('[Auto Claim] GlobalExitRootInvalid - L2 GER not synced yet, will retry in 2 minutes');
@@ -1628,7 +1632,7 @@ export function useWallet() {
       } else if (error.message?.includes('InvalidNetwork')) {
         console.error('[Auto Claim] InvalidNetwork - check L2 bridge initialization');
       }
-      
+
       throw error;
     }
   };

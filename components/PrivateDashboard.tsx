@@ -47,7 +47,7 @@ const PrivateDashboard: React.FC<PrivateDashboardProps> = ({ wallet, transaction
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <button 
+        <button
           onClick={() => onAction(TransactionType.PRIVATE_SEND)}
           className="flex flex-col items-center justify-center p-6 bg-zinc-900 border border-zinc-800 rounded-3xl shadow-lg hover:border-purple-500/50 transition-all group"
         >
@@ -57,7 +57,7 @@ const PrivateDashboard: React.FC<PrivateDashboardProps> = ({ wallet, transaction
           <span className="text-sm font-bold text-zinc-200">{t('shieldedSend')}</span>
         </button>
 
-        <button 
+        <button
           onClick={() => onAction(TransactionType.UNSHIELD)}
           className="flex flex-col items-center justify-center p-6 bg-zinc-900 border border-zinc-800 rounded-3xl shadow-lg hover:border-pink-500/50 transition-all group"
         >
@@ -70,7 +70,7 @@ const PrivateDashboard: React.FC<PrivateDashboardProps> = ({ wallet, transaction
 
       {/* Key Info / Backup Section */}
       <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl overflow-hidden transition-all">
-        <button 
+        <button
           onClick={() => setShowKeys(!showKeys)}
           className="w-full flex justify-between items-center p-4 hover:bg-zinc-800/50 transition-colors"
         >
@@ -88,7 +88,7 @@ const PrivateDashboard: React.FC<PrivateDashboardProps> = ({ wallet, transaction
             <p className="text-[10px] text-zinc-500 leading-relaxed italic">
               {t('keyInfoDesc')}
             </p>
-            
+
             <div className="space-y-2">
               <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800 flex justify-between items-center">
                 <div className="flex flex-col">
@@ -175,7 +175,8 @@ const PrivateDashboard: React.FC<PrivateDashboardProps> = ({ wallet, transaction
                 const amountEther = (() => {
                   try {
                     const big = typeof note.amount === 'bigint' ? note.amount : BigInt(note.amount);
-                    return (Number(big) / 1e18).toFixed(4);
+                    // Truncate to 4 decimal places (floor, not round)
+                    return Math.floor((Number(big) / 1e18) * 10000) / 10000;
                   } catch {
                     return '?';
                   }
@@ -195,7 +196,7 @@ const PrivateDashboard: React.FC<PrivateDashboardProps> = ({ wallet, transaction
                     <div className="flex flex-col gap-1">
                       <div className="flex items-center gap-2">
                         <span className={`text-base font-black ${note.spent ? 'line-through text-zinc-500' : 'text-purple-300'}`}>
-                          {amountEther} ATOSHI
+                          {amountEther} ATOS
                         </span>
                         {note.spent && (
                           <span className="text-[9px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 uppercase tracking-widest">
@@ -226,7 +227,7 @@ const PrivateDashboard: React.FC<PrivateDashboardProps> = ({ wallet, transaction
           <div className="flex justify-between items-center">
             <h4 className="text-zinc-100 font-bold">{t('sessionTransactions')}</h4>
             {onClearHistory && (
-              <button 
+              <button
                 onClick={() => {
                   if (window.confirm(t('clearHistoryConfirm'))) {
                     onClearHistory();

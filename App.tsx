@@ -20,7 +20,7 @@ const App: React.FC = () => {
   const [activeAsset, setActiveAsset] = useState<AssetType>(AssetType.PUBLIC);
   const [modalOpen, setModalOpen] = useState(false);
   const [activeAction, setActiveAction] = useState<TransactionType | null>(null);
-  
+
   const { address, isConnected } = useAccount();
   // Always query L2 balance regardless of which chain MetaMask is currently on.
   // Without `chainId: atoshiL2.id`, useBalance follows the wallet's current
@@ -31,7 +31,7 @@ const App: React.FC = () => {
     address,
     chainId: atoshiL2.id,
   });
-  
+
   // Initialize transactions from localStorage (isolated by address)
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
     if (!address) return [];
@@ -47,17 +47,17 @@ const App: React.FC = () => {
     }
     return [];
   });
-  
+
   // Reload transactions when address changes
   useEffect(() => {
     if (!address) {
       setTransactions([]);
       return;
     }
-    
+
     const storageKey = `transactions_${address.toLowerCase()}`;
     const stored = localStorage.getItem(storageKey);
-    
+
     if (stored) {
       try {
         const loadedTransactions = JSON.parse(stored);
@@ -72,7 +72,7 @@ const App: React.FC = () => {
       setTransactions([]);
     }
   }, [address]);
-  
+
   // Log balance changes
   useEffect(() => {
     if (balance) {
@@ -87,7 +87,7 @@ const App: React.FC = () => {
   const currentChainId = useChainId();
   const { switchChain } = useSwitchChain();
   const isOnAtoshiL2 = currentChainId === atoshiL2.id;
-  
+
   const {
     wallet,
     initializePrivacy,
@@ -173,7 +173,7 @@ const App: React.FC = () => {
           }
         }
       };
-      
+
       const ok = window.confirm(
         `${t('notOnAtoshiL2')} (${t('currentChain')}: ${currentChainId}).\n\n` +
         `${t('needSwitchToL2')} ${atoshiL2.id}).\n` +
@@ -245,33 +245,33 @@ const App: React.FC = () => {
       const MAX_TRANSACTIONS = 200;
       const updatedTransactions = [tx, ...transactions].slice(0, MAX_TRANSACTIONS);
       setTransactions(updatedTransactions);
-      
+
       // Persist to localStorage (isolated by address)
       if (address) {
         const storageKey = `transactions_${address.toLowerCase()}`;
         localStorage.setItem(storageKey, JSON.stringify(updatedTransactions));
       }
       closeModal();
-      
+
       console.log('[Balance Refresh] Transaction completed, starting balance refresh...');
       console.log('[Balance Refresh] Current balance before refetch:', balance);
-      
+
       // Refresh balance after successful transaction
       await refetchBalance();
-      
+
       console.log('[Balance Refresh] Balance refetched successfully');
       console.log('[Balance Refresh] New balance after refetch:', balance);
-      
+
       // Show success toast instead of alert
       console.log('[Transaction] Showing success toast...');
       setToastMessage(t('transactionSuccess'));
       setShowToast(true);
     } catch (error) {
       console.error('Transaction failed:', error);
-      
+
       // Use friendly error parser
       const displayMessage = formatErrorForDisplay(error);
-      
+
       setToastMessage(displayMessage);
       setShowToast(true);
     }
@@ -281,8 +281,9 @@ const App: React.FC = () => {
   const walletState = {
     ...wallet,
     address: address || '',
-    // Force-display ATOSHI (don't trust the symbol returned by the wallet — MetaMask and others store an inaccurate symbol for user-defined chains)
-    publicBalance: balance ? `${parseFloat(balance.formatted).toFixed(4)} ATOSHI` : '0 ATOSHI'
+    // Force-display ATOS (don't trust the symbol returned by the wallet — MetaMask and others store an inaccurate symbol for user-defined chains)
+    // Truncate to 4 decimal places (floor, not round)
+    publicBalance: balance ? `${Math.floor(parseFloat(balance.formatted) * 10000) / 10000} ATOS` : '0 ATOS'
   };
 
   return (
@@ -365,18 +366,18 @@ const App: React.FC = () => {
 
         <main className="flex-1 px-6 pt-4 pb-8 z-10">
           <AssetToggle activeAsset={activeAsset} setActiveAsset={setActiveAsset} />
-          
+
           <div className="mt-8">
             {activeAsset === AssetType.PUBLIC ? (
-              <PublicDashboard 
-                wallet={walletState} 
+              <PublicDashboard
+                wallet={walletState}
                 transactions={transactions.filter(t => [
-                  TransactionType.TRANSFER, 
-                  TransactionType.SHIELD, 
+                  TransactionType.TRANSFER,
+                  TransactionType.SHIELD,
                   TransactionType.UNSHIELD,
                   TransactionType.BRIDGE_DEPOSIT,
                   TransactionType.BRIDGE_WITHDRAW
-                ].includes(t.type))} 
+                ].includes(t.type))}
                 onAction={handleAction}
                 onClearHistory={handleClearHistory}
               />
@@ -416,10 +417,10 @@ const App: React.FC = () => {
         </main>
 
         {activeAction && (
-          <ActionModal 
-            isOpen={modalOpen} 
-            onClose={closeModal} 
-            type={activeAction} 
+          <ActionModal
+            isOpen={modalOpen}
+            onClose={closeModal}
+            type={activeAction}
             activeAsset={activeAsset}
             onConfirm={onConfirmAction}
             onShowToast={(message) => {
@@ -428,7 +429,7 @@ const App: React.FC = () => {
             }}
           />
         )}
-        
+
         {/* Toast notification */}
         <Toast message={toastMessage} isVisible={showToast} onClose={() => setShowToast(false)} />
       </div>

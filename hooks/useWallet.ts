@@ -63,6 +63,7 @@ function _deriveKeysFromSeed(seed: Uint8Array) {
 import {
   prepareAndProveUnshield,
   prepareAndProveTransfer,
+  prepareAndProveShield,
 } from '../sdk/zk-prover';
 import { formatAmountWithSuffix } from '../utils/amount-formatter';
 
@@ -377,7 +378,21 @@ export function useWallet() {
         viewingPubKey(viewingKey)
       );
 
-      // 2. Call Shield.deposit
+      // 2. Generate the deposit ZK proof. Audit Issue 2: Shield.deposit
+      //    now binds (amount, tokenId) into the commitment via this proof
+      //    so an attacker can't deposit 1 wei but commit 1000 tokens.
+      //    The shield circuit is small (~550 constraints) — proof gen
+      //    typically completes in 1-5s on a phone.
+      console.log('[shield] Generating deposit proof...');
+      const { proof: shieldProof } = await prepareAndProveShield({
+        amount: amountWei,
+        tokenId,
+        ownerPubkey,
+        blinding,
+        commitment,
+      });
+
+      // 3. Call Shield.deposit with the new ABI (audit Issue 2)
       const NATIVE_TOKEN = '0x0000000000000000000000000000000000000000' as const;
       const hash = await writeContractAsync({
         chain: atoshiL2,
@@ -389,6 +404,9 @@ export function useWallet() {
             type: 'function',
             stateMutability: 'payable',
             inputs: [
+              { name: 'pA', type: 'uint256[2]' },
+              { name: 'pB', type: 'uint256[2][2]' },
+              { name: 'pC', type: 'uint256[2]' },
               { name: 'commitment', type: 'uint256' },
               { name: 'token', type: 'address' },
               { name: 'amount', type: 'uint256' },
@@ -399,6 +417,12 @@ export function useWallet() {
         ] as const,
         functionName: 'deposit',
         args: [
+          [BigInt(shieldProof.pA[0]), BigInt(shieldProof.pA[1])],
+          [
+            [BigInt(shieldProof.pB[0][0]), BigInt(shieldProof.pB[0][1])],
+            [BigInt(shieldProof.pB[1][0]), BigInt(shieldProof.pB[1][1])],
+          ],
+          [BigInt(shieldProof.pC[0]), BigInt(shieldProof.pC[1])],
           commitment,
           NATIVE_TOKEN,
           amountWei,
@@ -610,21 +634,37 @@ export function useWallet() {
       return out;
     };
 
+    // Audit Q4: derive ownerPubkey once so we can re-hash the decrypted
+    // (amount, tokenId, ownerPubkey, blinding) into a fresh commitment and
+    // verify it equals the chain commitment. Notes whose recomputed
+    // commitment doesn't match are forged (someone broadcast an
+    // encryptedNote with inflated amount to phish the user's wallet) and
+    // must be dropped — otherwise the H5 displays a phantom balance.
+    const ownerPubkey = await deriveOwnerPubkey(spendingKey);
+
     const recovered: RecoveredNote[] = [];
     for (let i = 0; i < entries.length; i++) {
       const e = entries[i];
       if (!e.encryptedNote || e.encryptedNote === '0x' || e.encryptedNote.length <= 2) continue;
       const plaintext = await decryptNote(hexToBytes(e.encryptedNote), viewingKey);
       if (!plaintext) continue;
+
+      const amount = BigInt(plaintext.amount);
+      const tokenId = BigInt(plaintext.tokenId);
+      const blinding = BigInt(plaintext.blinding);
+      // Q4 check: drop the entry silently if commitment doesn't match.
+      const recomputed = await atoshiComputeCommitment(amount, tokenId, ownerPubkey, blinding);
+      if (recomputed !== e.commitment) continue;
+
       recovered.push({
         commitment: e.commitment,
         leafIndex: i,            // ⭐ use the chronological index as the leafIndex (Deposit + Transfer share a unified numbering)
         blockNumber: e.blockNumber,
         txHash: e.txHash,
         source: e.kind,
-        amount: BigInt(plaintext.amount),
-        tokenId: BigInt(plaintext.tokenId),
-        blinding: BigInt(plaintext.blinding),
+        amount,
+        tokenId,
+        blinding,
       });
     }
 
@@ -1098,6 +1138,14 @@ export function useWallet() {
           leafIndex: note.leafIndex,
         },
         recipientAddress: to,
+        // Self-broadcast mode (C1 step of the H5 audit work): the user's
+        // wallet signs the withdraw tx directly, so relayer = address(0)
+        // and fee MUST be 0 (Shield contract enforces this — audit
+        // Issue 5). The Q8 fix that routes withdraws through a relayer
+        // service lands in a follow-up commit alongside the relayer
+        // backend.
+        relayerAddress: '0x0000000000000000000000000000000000000000',
+        fee: 0n,
       }, (stage) => console.log('[unshield]', stage));
     } catch (error) {
       console.error('ZK proof generation failed:', error);

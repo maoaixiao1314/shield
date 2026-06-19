@@ -39,7 +39,9 @@ interface LocalMerkleTreeData {
 async function rebuildMerkleTreeFull(
   provider: ethers.JsonRpcProvider,
   shieldAddress: string,
-  levels = 20,
+  // Must match Shield.sol's TREE_LEVELS. Bumped to 32 in audit Issue 7
+  // to neutralize the cheap-DoS fill-the-tree attack.
+  levels = 32,
   chunkSize = 9000
 ): Promise<LocalMerkleTreeData> {
   const latest = await provider.getBlockNumber();
@@ -135,6 +137,8 @@ async function rebuildMerkleTreeFull(
   return { leaves, treeLevels, root, zeros, pathFor };
 }
 
+const SHIELD_WASM = '/circuits/shield.wasm';
+const SHIELD_ZKEY = '/circuits/shield_final.zkey';
 const UNSHIELD_WASM = '/circuits/unshield.wasm';
 const UNSHIELD_ZKEY = '/circuits/unshield_final.zkey';
 const TRANSFER_WASM = '/circuits/transfer.wasm';
@@ -147,11 +151,31 @@ export interface SolidityProof {
   pC: [string, string];
 }
 
+/**
+ * ShieldWitness — deposit circuit input.
+ * Audit Issue 2 added (amount, tokenId) as public inputs so the contract
+ * can verify the commitment was formed from the actual on-chain transfer.
+ */
+export interface ShieldWitness {
+  // public
+  commitment: string;
+  amount: string;
+  tokenId: string;
+  // private
+  owner: string;       // Poseidon(spendingKey)
+  blinding: string;
+}
+
 export interface UnshieldWitness {
   // public
   root: string;
   nullifierHash: string;
   recipient: string;
+  // Audit Issue 3 (circuit) / Issue 4 (contract): the relayer is now
+  // bound into the Groth16 public-input vector so an attacker cannot
+  // swap _relayer in calldata and steal the fee. Pass address(0) when
+  // self-broadcasting (fee must be 0 in that case).
+  relayer: string;
   tokenId: string;
   amount: string;
   fee: string;
@@ -210,6 +234,51 @@ export async function proveUnshield(
   return formatSnarkjsProof(proof);
 }
 
+/**
+ * Deposit proof — required by Shield.deposit() after audit Issue 2.
+ * Without it the contract reverts with "Shield: invalid deposit proof".
+ * Much cheaper than unshield/transfer proofs (no Merkle path), so the
+ * loading UI can usually finish in a couple of seconds on commodity
+ * hardware.
+ */
+export async function proveShield(
+  witness: ShieldWitness,
+  onProgress?: (stage: string) => void
+): Promise<SolidityProof> {
+  onProgress?.('Generating deposit proof (1-5 seconds)...');
+  const { proof } = await snarkjs.groth16.fullProve(
+    witness as any,
+    SHIELD_WASM,
+    SHIELD_ZKEY
+  );
+  onProgress?.('deposit proof complete');
+  return formatSnarkjsProof(proof);
+}
+
+/**
+ * High-level Shield: compute commitment + prove correct formation in
+ * one shot. Caller supplies the secret material; we don't touch the
+ * SDK's randomBlinding so callers can keep their existing deterministic
+ * test vectors.
+ */
+export async function prepareAndProveShield(args: {
+  amount: bigint;
+  tokenId: bigint;
+  ownerPubkey: bigint;   // Poseidon(spendingKey) — already derived by caller
+  blinding: bigint;
+  commitment: bigint;    // already computed by caller (avoids re-Poseidon here)
+}, onProgress?: (stage: string) => void): Promise<{ proof: SolidityProof }> {
+  const witness: ShieldWitness = {
+    commitment: args.commitment.toString(),
+    amount: args.amount.toString(),
+    tokenId: args.tokenId.toString(),
+    owner: args.ownerPubkey.toString(),
+    blinding: args.blinding.toString(),
+  };
+  const proof = await proveShield(witness, onProgress);
+  return { proof };
+}
+
 export async function proveTransfer(
   witness: TransferWitness,
   onProgress?: (stage: string) => void
@@ -239,6 +308,11 @@ export async function prepareAndProveUnshield(args: {
     leafIndex: number;
   };
   recipientAddress: string;
+  // Audit Issue 3/4: relayer is now bound into the proof. Pass the EOA
+  // that will actually broadcast Shield.withdraw. Default to address(0)
+  // for self-broadcast (in which case fee MUST be 0; the contract
+  // enforces it).
+  relayerAddress?: string;
   fee?: bigint;
 }, onProgress?: (stage: string) => void): Promise<{
   proof: SolidityProof;
@@ -254,13 +328,20 @@ export async function prepareAndProveUnshield(args: {
   onProgress?.('Constructing path...');
   const path = tree.pathFor(args.note.leafIndex);
 
+  const relayerAddr = args.relayerAddress ?? '0x0000000000000000000000000000000000000000';
+  const fee = args.fee ?? 0n;
+  if (fee > 0n && BigInt(relayerAddr) === 0n) {
+    throw new Error('A non-zero relayer address is required when fee > 0 (Shield contract enforces this).');
+  }
+
   const witness: UnshieldWitness = {
     root: path.root.toString(),
     nullifierHash: nullifier.toString(),
     recipient: BigInt(args.recipientAddress).toString(),
+    relayer: BigInt(relayerAddr).toString(),
     tokenId: args.note.tokenId.toString(),
     amount: args.note.amount.toString(),
-    fee: (args.fee ?? 0n).toString(),
+    fee: fee.toString(),
     privateKey: args.spendingKey.toString(),
     blinding: args.note.blinding.toString(),
     leafIndex: args.note.leafIndex.toString(),

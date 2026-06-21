@@ -783,7 +783,10 @@ export function useWallet() {
   //
   // Security: both ownerPubkey and viewingPubKey are public values, so sharing them does not leak Bob's funds.
   const privateSend = async (amount: string, to: string): Promise<Transaction> => {
-    const accountAddress = await ensureWalletConnected();
+    // Relayer mode: relayer EOA submits the tx, so we don't need the
+    // user's address here. Still call ensureWalletConnected() so the
+    // user has authorized the dApp and we can read their privacy keys.
+    await ensureWalletConnected();
     if (!wallet.privacyKeys?.isInitialized) throw new Error('Please initialize your privacy identity first');
 
     try {
@@ -973,45 +976,47 @@ export function useWallet() {
 
     const { proof, root, nullifierHash } = proofResult;
 
-    // 5. Call Shield.transfer
-    const hash = await writeContractAsync({
-      chain: atoshiL2,
-      account: accountAddress as `0x${string}`,
-      address: config.contracts.shield as `0x${string}`,
-      abi: [
-        {
-          name: 'transfer',
-          type: 'function',
-          stateMutability: 'nonpayable',
-          inputs: [
-            { name: 'pA', type: 'uint256[2]' },
-            { name: 'pB', type: 'uint256[2][2]' },
-            { name: 'pC', type: 'uint256[2]' },
-            { name: 'root', type: 'uint256' },
-            { name: 'nullifierHash', type: 'uint256' },
-            { name: 'newCommitment', type: 'uint256' },
-            { name: 'encryptedNote', type: 'bytes' },
+    // 5. Submit through the privacy relayer. Shield.transfer has no
+    //    _relayer field (no fee distribution), so anyone can submit a
+    //    valid proof — we route through the relayer purely to keep the
+    //    user's wallet address off the L2 receipt, which is what
+    //    audit Q8 requires for full sender privacy.
+    const relayerUrl = import.meta.env.VITE_RELAYER_URL as string;
+    if (!relayerUrl) {
+      throw new Error('VITE_RELAYER_URL must be set');
+    }
+
+    console.log('[transfer] Submitting proof to relayer', relayerUrl);
+    const relayResp = await fetch(`${relayerUrl}/relay/transfer`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        proof: {
+          pA: [proof.pA[0].toString(), proof.pA[1].toString()],
+          pB: [
+            [proof.pB[0][0].toString(), proof.pB[0][1].toString()],
+            [proof.pB[1][0].toString(), proof.pB[1][1].toString()],
           ],
-          outputs: [],
+          pC: [proof.pC[0].toString(), proof.pC[1].toString()],
         },
-      ] as const,
-      functionName: 'transfer',
-      args: [
-        [BigInt(proof.pA[0]), BigInt(proof.pA[1])],
-        [
-          [BigInt(proof.pB[0][0]), BigInt(proof.pB[0][1])],
-          [BigInt(proof.pB[1][0]), BigInt(proof.pB[1][1])],
-        ],
-        [BigInt(proof.pC[0]), BigInt(proof.pC[1])],
-        BigInt(root),
-        BigInt(nullifierHash),
-        newCommitment,
-        bytesToHex(encryptedNote) as `0x${string}`,
-      ],
-      gas: 1_500_000n,
-      gasPrice: 2_000_000_000n,
-      type: 'legacy',  // fork11 pool requires type-0 (see deposit comment)
+        publicSignals: {
+          root: root.toString(),
+          nullifierHash: nullifierHash.toString(),
+          newCommitment: newCommitment.toString(),
+        },
+        encryptedNote: bytesToHex(encryptedNote),
+      }),
     });
+
+    if (!relayResp.ok) {
+      const errText = await relayResp.text();
+      let errJson: any = null;
+      try { errJson = JSON.parse(errText); } catch { /* not JSON */ }
+      throw new Error(`Relayer rejected transfer (${relayResp.status}): ${errJson?.error || errText}`);
+    }
+    const { txHash } = await relayResp.json();
+    if (!txHash) throw new Error('Relayer accepted proof but returned no txHash');
+    const hash = txHash as string;
 
     // 6. Wait for the transaction to be confirmed
     console.log('[transfer] Waiting for transaction confirmation...');
@@ -1051,9 +1056,13 @@ export function useWallet() {
     };
   };
 
-  // Unshield (private → public) — real ZK proof + Shield.withdraw
+  // Unshield (private → public) — real ZK proof + Shield.withdraw via relayer
   const unshield = async (amount: string, to: string): Promise<Transaction> => {
-    const accountAddress = await ensureWalletConnected();
+    // Relayer mode: relayer EOA submits the withdraw tx, so the user's
+    // wallet address never appears as msg.sender on-chain. Still call
+    // ensureWalletConnected() to confirm the dApp is authorized and to
+    // unlock the privacy keys.
+    await ensureWalletConnected();
     if (!wallet.privacyKeys?.isInitialized) throw new Error('Please initialize your privacy identity first');
 
     try {
@@ -1138,13 +1147,12 @@ export function useWallet() {
           leafIndex: note.leafIndex,
         },
         recipientAddress: to,
-        // Self-broadcast mode (C1 step of the H5 audit work): the user's
-        // wallet signs the withdraw tx directly, so relayer = address(0)
-        // and fee MUST be 0 (Shield contract enforces this — audit
-        // Issue 5). The Q8 fix that routes withdraws through a relayer
-        // service lands in a follow-up commit alongside the relayer
-        // backend.
-        relayerAddress: '0x0000000000000000000000000000000000000000',
+        // Relayer mode (audit Q8): bind the relayer's L2 EOA into the
+        // proof's `_relayer` public input so an attacker can't intercept
+        // the proof and reroute the fee to themselves. fee=0 because the
+        // testnet relayer covers gas as a service; production sets a
+        // non-zero fee paid in the withdrawn token.
+        relayerAddress: import.meta.env.VITE_RELAYER_ADDRESS as string,
         fee: 0n,
       }, (stage) => console.log('[unshield]', stage));
     } catch (error) {
@@ -1178,52 +1186,53 @@ export function useWallet() {
 
     const { proof, root, nullifierHash } = proofResult;
 
-    // 4. Call Shield.withdraw
+    // 4. Submit through the privacy relayer instead of signing locally.
+    //    The relayer holds its own L2 EOA, validates that the proof's
+    //    `_relayer` field matches its address (audit Issue 3 / 4), then
+    //    calls Shield.withdraw and pays the L2 gas. The user's wallet
+    //    address never appears as msg.sender for this tx, which is
+    //    audit Q8's whole point.
     const NATIVE_TOKEN = '0x0000000000000000000000000000000000000000' as const;
-    const hash = await writeContractAsync({
-      chain: atoshiL2,
-      account: accountAddress as `0x${string}`,
-      address: config.contracts.shield as `0x${string}`,
-      abi: [
-        {
-          name: 'withdraw',
-          type: 'function',
-          stateMutability: 'nonpayable',
-          inputs: [
-            { name: 'pA', type: 'uint256[2]' },
-            { name: 'pB', type: 'uint256[2][2]' },
-            { name: 'pC', type: 'uint256[2]' },
-            { name: 'root', type: 'uint256' },
-            { name: 'nullifierHash', type: 'uint256' },
-            { name: 'recipient', type: 'address' },
-            { name: 'relayer', type: 'address' },
-            { name: 'fee', type: 'uint256' },
-            { name: 'token', type: 'address' },
-            { name: 'amount', type: 'uint256' },
+    const relayerUrl = import.meta.env.VITE_RELAYER_URL as string;
+    const relayerAddr = import.meta.env.VITE_RELAYER_ADDRESS as string;
+    if (!relayerUrl || !relayerAddr) {
+      throw new Error('VITE_RELAYER_URL and VITE_RELAYER_ADDRESS must be set');
+    }
+
+    console.log('[unshield] Submitting proof to relayer', relayerUrl);
+    const relayResp = await fetch(`${relayerUrl}/relay/withdraw`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        proof: {
+          pA: [proof.pA[0].toString(), proof.pA[1].toString()],
+          pB: [
+            [proof.pB[0][0].toString(), proof.pB[0][1].toString()],
+            [proof.pB[1][0].toString(), proof.pB[1][1].toString()],
           ],
-          outputs: [],
+          pC: [proof.pC[0].toString(), proof.pC[1].toString()],
         },
-      ] as const,
-      functionName: 'withdraw',
-      args: [
-        [BigInt(proof.pA[0]), BigInt(proof.pA[1])],
-        [
-          [BigInt(proof.pB[0][0]), BigInt(proof.pB[0][1])],
-          [BigInt(proof.pB[1][0]), BigInt(proof.pB[1][1])],
-        ],
-        [BigInt(proof.pC[0]), BigInt(proof.pC[1])],
-        BigInt(root),
-        BigInt(nullifierHash),
-        to as `0x${string}`,
-        NATIVE_TOKEN,        // relayer: self-pay mode
-        0n,                  // fee: self-pay
-        NATIVE_TOKEN,
-        amountWei,
-      ],
-      gas: 1_500_000n,
-      gasPrice: 2_000_000_000n,
-      type: 'legacy',  // fork11 pool requires type-0 (see deposit comment)
+        publicSignals: {
+          root: root.toString(),
+          nullifierHash: nullifierHash.toString(),
+          recipient: to,
+          relayer: relayerAddr,
+          amount: amountWei.toString(),
+          fee: '0',
+        },
+        token: NATIVE_TOKEN,
+      }),
     });
+
+    if (!relayResp.ok) {
+      const errText = await relayResp.text();
+      let errJson: any = null;
+      try { errJson = JSON.parse(errText); } catch { /* not JSON */ }
+      throw new Error(`Relayer rejected withdraw (${relayResp.status}): ${errJson?.error || errText}`);
+    }
+    const { txHash } = await relayResp.json();
+    if (!txHash) throw new Error('Relayer accepted proof but returned no txHash');
+    const hash = txHash as string;
 
     // 6. Wait for the transaction to be confirmed
     console.log('[unshield] Waiting for transaction confirmation...');

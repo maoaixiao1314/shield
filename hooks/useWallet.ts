@@ -492,7 +492,7 @@ export function useWallet() {
         id: hash,
         type: TransactionType.SHIELD,
         amount: formatAmountWithSuffix(amount),
-        asset: 'ATOS',
+        asset: 'ATOStest',
         timestamp: Date.now(),
         from: accountAddress,
         to: wallet.privacyKeys.publicAddress,
@@ -1046,7 +1046,7 @@ export function useWallet() {
       id: hash,
       type: TransactionType.PRIVATE_SEND,
       amount: formatAmountWithSuffix(amount),
-      asset: 'ATOS',
+      asset: 'ATOStest',
       timestamp: Date.now(),
       from: wallet.privacyKeys.publicAddress,
       to,
@@ -1262,7 +1262,7 @@ export function useWallet() {
       id: hash,
       type: TransactionType.UNSHIELD,
       amount: formatAmountWithSuffix(amount),
-      asset: 'ATOS',
+      asset: 'ATOStest',
       timestamp: Date.now(),
       from: wallet.privacyKeys.publicAddress,
       to,
@@ -1328,7 +1328,7 @@ export function useWallet() {
         id: hash,
         type: TransactionType.TRANSFER,
         amount: formatAmountWithSuffix(amount),
-        asset: 'ATOS',
+        asset: 'ATOStest',
         timestamp: Date.now(),
         from: accountAddress,
         to,
@@ -1365,7 +1365,7 @@ export function useWallet() {
               params: [{
                 chainId: l1ChainIdHex,
                 chainName: config.l1.name,
-                nativeCurrency: { name: 'Atoshi', symbol: 'ATOS', decimals: 18 },
+                nativeCurrency: config.l2.nativeCurrency,
                 rpcUrls: [config.l1.rpcUrl],
               }],
             });
@@ -1419,7 +1419,7 @@ export function useWallet() {
         id: receipt.hash,
         type: TransactionType.BRIDGE_DEPOSIT,
         amount: formatAmountWithSuffix(amount),
-        asset: 'ATOS',
+        asset: 'ATOStest',
         timestamp: Date.now(),
         from: destinationAddress,  // Use the address we already fetched
         to: destinationAddress,
@@ -1565,7 +1565,7 @@ export function useWallet() {
         id: receipt.hash,
         type: TransactionType.BRIDGE_WITHDRAW,
         amount: formatAmountWithSuffix(amount),
-        asset: 'ATOS',
+        asset: 'ATOStest',
         timestamp: Date.now(),
         from: destinationAddress,  // Use the address we already fetched
         to: destinationAddress,
@@ -1708,7 +1708,7 @@ export function useWallet() {
               params: [{
                 chainId: l1ChainIdHex,
                 chainName: config.l1.name,
-                nativeCurrency: { name: 'Atoshi', symbol: 'ATOS', decimals: 18 },
+                nativeCurrency: config.l2.nativeCurrency,
                 rpcUrls: [config.l1.rpcUrl],
               }],
             });

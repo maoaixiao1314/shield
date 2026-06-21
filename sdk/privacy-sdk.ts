@@ -214,7 +214,7 @@ export class PrivacySDK {
       id: txId,
       type: TransactionType.PRIVATE_SEND,
       amount: ethers.formatEther(amount),
-      asset: 'ATOS',
+      asset: 'ATOStest',
       timestamp: Date.now(),
       from: this.privacyKeys.publicAddress,
       to: recipientAddress,

@@ -7,7 +7,12 @@ export const config = {
   l2: {
     rpcUrl: import.meta.env.VITE_L2_RPC_URL || 'https://l2-rpc1-testnet.atoshi.org',
     chainId: parseInt(import.meta.env.VITE_L2_CHAIN_ID || '67890'),
-    name: 'Atoshi L2'
+    name: 'Atoshi L2 Privacy Testnet',
+    // Testnet symbol uses "ATOStest" so users / wallets / explorers all
+    // distinguish from the future mainnet token. The on-chain native
+    // token name is unchanged (set by L2 genesis); this is pure UI
+    // labeling consumed by wallet_addEthereumChain.
+    nativeCurrency: { name: 'Atoshi Testnet', symbol: 'ATOStest', decimals: 18 }
   },
 
   // L1 configuration for bridge

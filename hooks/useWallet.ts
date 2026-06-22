@@ -429,7 +429,10 @@ export function useWallet() {
           bytesToHex(encryptedNote) as `0x${string}`,
         ],
         value: amountWei,
-        gas: 1_500_000n,
+        // Merkle depth 32 (audit Issue 7) + the new deposit-proof verifier
+        // push gas usage well past the old 1.5M ceiling; 8M leaves plenty
+        // of headroom and is still 25% of the 30M block cap.
+        gas: 8_000_000n,
         gasPrice: 2_000_000_000n,
         type: 'legacy',  // fork11 pool only accepts type-0; viem otherwise picks EIP-1559 once block.baseFeePerGas appears, pool rejects with "RPC submit: invalid sender"
       });

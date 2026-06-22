@@ -203,7 +203,7 @@ const zh = {
   noNotesYet: '还没有 Note。进行一笔屏蔽交易,或点击"🔄 从链上恢复 NOTE"来同步。',
   spent: '已花费',
   pendingSync: '等待同步',
-  sessionTransactions: '本次会话的交易记录',
+  sessionTransactions: '最近隐私交易',
   noTransactionHistory: '暂无交易历史',
   startYourFirstTx: '开始您的第一笔交易吧！',
 
@@ -436,7 +436,7 @@ const en = {
   noNotesYet: 'No Notes yet. Shield a transaction, or click "🔄 Recover NOTE from chain" to sync.',
   spent: 'Spent',
   pendingSync: 'Pending Sync',
-  sessionTransactions: "This Session's Transaction Records",
+  sessionTransactions: "Recent Private Txs",
   noTransactionHistory: 'No transaction history yet',
   startYourFirstTx: 'Start your first transaction!',
 

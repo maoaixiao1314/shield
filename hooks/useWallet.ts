@@ -710,29 +710,26 @@ export function useWallet() {
     }
     const spentCount = spentFlags.filter(Boolean).length;
 
-    // 6. Merge into local storage (deduplicated by commitment)
-    const existing = loadNotes();
-    const existingCommitments = new Set(existing.map((n: any) => n.commitment));
-    for (let k = 0; k < recovered.length; k++) {
-      const note = recovered[k];
-      if (existingCommitments.has(note.commitment.toString())) continue;
-      existing.push({
-        amount: note.amount.toString(),
-        secret: note.blinding.toString(),
-        nullifier: '',
-        recipient: wallet.privacyKeys.publicAddress,
-        spent: spentFlags[k],
-        leafIndex: note.leafIndex,
-        commitment: note.commitment.toString(),
-      });
-    }
-    localStorage.setItem('privacy_notes', JSON.stringify(existing));
+    // 6. Replace local storage with chain data (overwrite, not merge)
+    // This ensures spent status is synced and removes stale/invalid notes
+    const notesToSave = recovered.map((note, k) => ({
+      amount: note.amount.toString(),
+      secret: note.blinding.toString(),
+      nullifier: '',
+      recipient: wallet.privacyKeys.publicAddress,
+      spent: spentFlags[k],
+      leafIndex: note.leafIndex,
+      commitment: note.commitment.toString(),
+    }));
+    
+    localStorage.setItem('privacy_notes', JSON.stringify(notesToSave));
     localStorage.setItem('last_scanned_block', latest.toString());
     refreshPrivateState();          // ⭐ UI refreshes immediately
     console.log(
       `[recovery] ${entries.length} leaf-inserting events total, ` +
       `recovered ${recovered.length} Notes belonging to you ` +
-      `(${recovered.length - spentCount} unspent, ${spentCount} already spent on-chain)`,
+      `(${recovered.length - spentCount} unspent, ${spentCount} already spent on-chain). ` +
+      `Local storage has been overwritten with chain data.`,
     );
     return recovered;
   };

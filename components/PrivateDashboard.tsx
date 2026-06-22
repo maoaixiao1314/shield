@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { WalletState, Transaction, TransactionType } from '../types';
-import { Ghost, ShieldX, Sparkles, Key, Info, ExternalLink, Eye, EyeOff } from 'lucide-react';
+import { Ghost, ShieldX, Sparkles, Key, Info, ExternalLink, Eye, EyeOff, FileText } from 'lucide-react';
 import { formatAmount } from '../utils/amount-formatter';
 import HistoryItem from './HistoryItem';
 import QRCodeDisplay from './QRCodeDisplay';
@@ -223,30 +223,39 @@ const PrivateDashboard: React.FC<PrivateDashboardProps> = ({ wallet, transaction
       </div>
 
       {/* On-chain transaction records (for this session, so the user can see on-chain tx hashes) */}
-      {transactions.length > 0 && (
-        <div className="space-y-4 mt-6">
-          <div className="flex justify-between items-center">
-            <h4 className="text-zinc-100 font-bold">{t('sessionTransactions')}</h4>
-            {onClearHistory && (
-              <button
-                onClick={() => {
-                  if (window.confirm(t('clearHistoryConfirm'))) {
-                    onClearHistory();
-                  }
-                }}
-                className="text-red-500 text-xs font-bold uppercase hover:underline"
-              >
-                {t('clearHistory')}
-              </button>
-            )}
+      <div className="space-y-4 mt-6">
+        <div className="flex justify-between items-center">
+          <h4 className="text-zinc-100 font-bold">{t('sessionTransactions')}</h4>
+          {onClearHistory && (
+            <button
+              onClick={() => {
+                if (window.confirm(t('clearHistoryConfirm'))) {
+                  onClearHistory();
+                }
+              }}
+              className="text-red-500 text-xs font-bold uppercase hover:underline"
+            >
+              {t('clearHistory')}
+            </button>
+          )}
+        </div>
+        
+        {transactions.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 px-4 bg-gradient-to-br from-zinc-900/50 to-zinc-900/30 rounded-2xl border-2 border-dashed border-zinc-800">
+            <div className="p-4 bg-zinc-800/50 rounded-full mb-4">
+              <FileText size={48} className="text-zinc-600" />
+            </div>
+            <h5 className="text-lg font-bold text-zinc-400 mb-2">{t('noTransactionHistory')}</h5>
+            <p className="text-sm text-zinc-500 text-center max-w-xs">{t('startYourFirstTx')}</p>
           </div>
+        ) : (
           <div className="space-y-3">
             {transactions.map(tx => (
               <HistoryItem key={tx.id} tx={tx} isPrivate={true} />
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };

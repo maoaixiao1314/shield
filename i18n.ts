@@ -178,6 +178,8 @@ const zh = {
   sendATOSHI: '发送 ATOS',
   shieldFunds: '屏蔽资金',
   recentPublicTxs: '最近公开交易',
+  noTransactionHistory: '暂无交易历史',
+  startYourFirstTx: '开始您的第一笔交易吧！',
 
   // PrivateDashboard.tsx
   shieldedAssets: '屏蔽资产',
@@ -202,6 +204,8 @@ const zh = {
   spent: '已花费',
   pendingSync: '等待同步',
   sessionTransactions: '本次会话的交易记录',
+  noTransactionHistory: '暂无交易历史',
+  startYourFirstTx: '开始您的第一笔交易吧！',
 
   // ActionModal.tsx
   sendATOSHITitle: '发送 ATOS',
@@ -407,6 +411,8 @@ const en = {
   sendATOSHI: 'Send ATOS',
   shieldFunds: 'Shield Funds',
   recentPublicTxs: 'Recent Public Txs',
+  noTransactionHistory: 'No transaction history yet',
+  startYourFirstTx: 'Start your first transaction!',
 
   // PrivateDashboard.tsx
   shieldedAssets: 'Shielded Assets',
@@ -431,6 +437,8 @@ const en = {
   spent: 'Spent',
   pendingSync: 'Pending Sync',
   sessionTransactions: "This Session's Transaction Records",
+  noTransactionHistory: 'No transaction history yet',
+  startYourFirstTx: 'Start your first transaction!',
 
   // ActionModal.tsx
   sendATOSHITitle: 'Send ATOS',

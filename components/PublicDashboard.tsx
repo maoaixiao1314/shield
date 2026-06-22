@@ -2,7 +2,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { WalletState, Transaction, TransactionType } from '../types';
-import { ArrowUpRight, ArrowDownLeft, Shield } from 'lucide-react';
+import { ArrowUpRight, ArrowDownLeft, Shield, FileText } from 'lucide-react';
 import HistoryItem from './HistoryItem';
 
 interface PublicDashboardProps {
@@ -85,9 +85,19 @@ const PublicDashboard: React.FC<PublicDashboardProps> = ({ wallet, transactions,
         </div>
         
         <div className="space-y-3">
-          {transactions.map(tx => (
-            <HistoryItem key={tx.id} tx={tx} isPrivate={false} />
-          ))}
+          {transactions.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 px-4 bg-gradient-to-br from-slate-50 to-white rounded-2xl border-2 border-dashed border-slate-200">
+              <div className="p-4 bg-slate-100 rounded-full mb-4">
+                <FileText size={48} className="text-slate-400" />
+              </div>
+              <h5 className="text-lg font-bold text-slate-700 mb-2">{t('noTransactionHistory')}</h5>
+              <p className="text-sm text-slate-500 text-center max-w-xs">{t('startYourFirstTx')}</p>
+            </div>
+          ) : (
+            transactions.map(tx => (
+              <HistoryItem key={tx.id} tx={tx} isPrivate={false} />
+            ))
+          )}
         </div>
       </div>
     </div>

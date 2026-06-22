@@ -15,6 +15,7 @@ import { useWallet } from './hooks/useWallet';
 import { Shield } from 'lucide-react';
 import { formatErrorForDisplay } from './utils/error-parser';
 import { formatAmountWithSuffix } from './utils/amount-formatter';
+import { fetchTransactions } from './services/transaction-api';
 
 const App: React.FC = () => {
   const { t } = useTranslation();
@@ -33,45 +34,34 @@ const App: React.FC = () => {
     chainId: atoshiL2.id,
   });
 
-  // Initialize transactions from localStorage (isolated by address)
-  const [transactions, setTransactions] = useState<Transaction[]>(() => {
-    if (!address) return [];
-    const storageKey = `transactions_${address.toLowerCase()}`;
-    const stored = localStorage.getItem(storageKey);
-    if (stored) {
-      try {
-        return JSON.parse(stored);
-      } catch (e) {
-        console.error('Failed to parse transactions from localStorage:', e);
-        return [];
-      }
-    }
-    return [];
-  });
+  // Initialize transactions state (will be loaded from API when wallet connects)
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [isLoadingTransactions, setIsLoadingTransactions] = useState(false);
 
-  // Reload transactions when address changes
+  // Load transactions from API when address changes
   useEffect(() => {
     if (!address) {
       setTransactions([]);
       return;
     }
 
-    const storageKey = `transactions_${address.toLowerCase()}`;
-    const stored = localStorage.getItem(storageKey);
-
-    if (stored) {
+    const loadTransactions = async () => {
+      setIsLoadingTransactions(true);
       try {
-        const loadedTransactions = JSON.parse(stored);
-        console.log(`[Address Change] Loaded ${loadedTransactions.length} transactions for ${address}`);
-        setTransactions(loadedTransactions);
-      } catch (e) {
-        console.error('Failed to parse transactions from localStorage:', e);
+        console.log(`[Transaction API] Loading transactions for ${address}`);
+        const txs = await fetchTransactions(address);
+        console.log(`[Transaction API] Loaded ${txs.length} transactions`);
+        setTransactions(txs);
+      } catch (error) {
+        console.error('[Transaction API] Failed to load transactions:', error);
+        // Fallback: keep empty array, don't show error toast to avoid spam
         setTransactions([]);
+      } finally {
+        setIsLoadingTransactions(false);
       }
-    } else {
-      console.log(`[Address Change] No transactions found for ${address}`);
-      setTransactions([]);
-    }
+    };
+
+    loadTransactions();
   }, [address]);
 
   // Log balance changes
@@ -249,8 +239,8 @@ const App: React.FC = () => {
   const handleClearHistory = () => {
     if (!address) return;
     setTransactions([]);
-    const storageKey = `transactions_${address.toLowerCase()}`;
-    localStorage.removeItem(storageKey);
+    // Note: API-based transactions cannot be cleared, this only clears UI state
+    console.log('[Transaction] Transaction history cleared from UI');
   };
 
   const onConfirmAction = async (amount: string, to: string) => {
@@ -280,16 +270,12 @@ const App: React.FC = () => {
           throw new Error('Unknown action type');
       }
 
-      // Add new transaction and limit to MAX count
-      const MAX_TRANSACTIONS = 200;
-      const updatedTransactions = [tx, ...transactions].slice(0, MAX_TRANSACTIONS);
+      // Add new transaction to the beginning of the list
+      const updatedTransactions = [tx, ...transactions];
       setTransactions(updatedTransactions);
-
-      // Persist to localStorage (isolated by address)
-      if (address) {
-        const storageKey = `transactions_${address.toLowerCase()}`;
-        localStorage.setItem(storageKey, JSON.stringify(updatedTransactions));
-      }
+      
+      console.log('[Transaction] New transaction added to UI:', tx.type);
+      // Note: Transactions are now persisted via API, no localStorage needed
       // Modal will be closed by ActionModal after success
 
       console.log('[Balance Refresh] Transaction completed, starting balance refresh...');

@@ -31,7 +31,8 @@ export interface TransactionResponse {
 export async function fetchTransactions(address: string): Promise<Transaction[]> {
   try {
     const normalizedAddress = address.toLowerCase();
-    const url = `${BASE_URL}/transactions/${normalizedAddress}`;
+    // Request first page with 1000 transactions to load all history at once
+    const url = `${BASE_URL}/transactions/${normalizedAddress}?page=1&limit=1000`;
 
     console.log('[API] Fetching transactions from:', url);
 

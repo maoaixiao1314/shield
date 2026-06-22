@@ -55,26 +55,7 @@ export async function fetchTransactions(address: string): Promise<Transaction[]>
 
     console.log(`[API] Fetched ${result.data.transactions.length} transactions`);
 
-    // Add mock transaction for testing (temporary, for demo purposes)
-    const mockTransaction: Transaction = {
-      id: 'mock-tx-001',
-      type: 'TRANSFER' as any,
-      amount: '1.23456789 ATOS',
-      asset: 'ATOS',
-      timestamp: Date.now(),
-      from: address.toLowerCase(),
-      to: '0xabcdef1234567890abcdef1234567890abcdef12',
-      status: 'completed',
-      txHash: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
-      blockNumber: 123456,
-      gasUsed: '21000',
-      gasPrice: '2000000000',
-    };
-
-    const transactionsWithMock = [...result.data.transactions, mockTransaction];
-    console.log(`[API] Added mock transaction, total: ${transactionsWithMock.length}`);
-
-    return transactionsWithMock;
+    return result.data.transactions;
   } catch (error) {
     console.error('[API] Failed to fetch transactions:', error);
     throw error;

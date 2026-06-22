@@ -24,6 +24,9 @@ export interface Transaction {
   status: 'pending' | 'completed' | 'failed';
   txHash?: string; // Optional for private txs
   nullifier?: string; // Only for private txs
+  blockNumber?: number; // Block number (optional)
+  gasUsed?: string; // Gas used (optional)
+  gasPrice?: string; // Gas price in wei (optional)
 }
 
 export interface PrivacyKeys {
